@@ -1,26 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/library_filter_notifier.dart';
 import '../../../core/utils/duration_format.dart';
 import '../../../domain/library_filter_state.dart';
-import '../providers/search_providers.dart';
+import '../../library/providers/library_providers.dart';
 
-Future<void> showFilterPanel(BuildContext context) {
+/// [provider] decides whose filters are being edited — the Library tab and
+/// the Search tab each pass their own.
+Future<void> showFilterPanel(BuildContext context, LibraryFilterProvider provider) {
   return showModalBottomSheet(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (context) => const _FilterPanel(),
+    builder: (context) => _FilterPanel(provider: provider),
   );
 }
 
 class _FilterPanel extends ConsumerWidget {
-  const _FilterPanel();
+  const _FilterPanel({required this.provider});
+
+  final LibraryFilterProvider provider;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final filter = ref.watch(libraryFilterProvider);
-    final notifier = ref.read(libraryFilterProvider.notifier);
+    final filter = ref.watch(provider);
+    final notifier = ref.read(provider.notifier);
     final formats = ref.watch(availableFormatsProvider);
     final theme = Theme.of(context);
 

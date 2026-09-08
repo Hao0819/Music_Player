@@ -21,13 +21,15 @@ class KnownTrackRecordAdapter extends TypeAdapter<KnownTrackRecord> {
       mediaStoreId: fields[1] as int,
       firstSeenAt: fields[2] as DateTime,
       lastSeenAt: fields[3] as DateTime,
+      acknowledged: fields[4] as bool,
+      missing: fields[5] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, KnownTrackRecord obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.path)
       ..writeByte(1)
@@ -35,7 +37,11 @@ class KnownTrackRecordAdapter extends TypeAdapter<KnownTrackRecord> {
       ..writeByte(2)
       ..write(obj.firstSeenAt)
       ..writeByte(3)
-      ..write(obj.lastSeenAt);
+      ..write(obj.lastSeenAt)
+      ..writeByte(4)
+      ..write(obj.acknowledged)
+      ..writeByte(5)
+      ..write(obj.missing);
   }
 
   @override

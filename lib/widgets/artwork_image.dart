@@ -76,17 +76,20 @@ class _ArtworkImageState extends ConsumerState<ArtworkImage> {
     final bytes = _bytes;
 
     if (bytes == null || bytes.isEmpty) {
+      // Deliberately reads as "this track has no cover" rather than as a
+      // stand-in picture: outlined and muted, not a solid coloured tile.
       return Container(
         width: widget.size,
         height: widget.size,
         decoration: BoxDecoration(
-          color: scheme.secondaryContainer,
+          color: scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(widget.borderRadius),
+          border: Border.all(color: scheme.outlineVariant),
         ),
         child: Icon(
-          Icons.music_note,
-          size: widget.iconSize ?? widget.size * 0.5,
-          color: scheme.onSecondaryContainer,
+          Icons.music_off_outlined,
+          size: widget.iconSize ?? widget.size * 0.4,
+          color: scheme.onSurfaceVariant,
         ),
       );
     }

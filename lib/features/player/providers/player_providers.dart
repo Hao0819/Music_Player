@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/track.dart';
 import '../../../services/audio/audio_player_handler.dart';
-import '../../search/providers/search_providers.dart';
+import '../../library/providers/library_providers.dart';
 
 /// Overridden in `main()` once [AudioService.init] has produced the handler.
 final audioHandlerProvider = Provider<AudioPlayerHandler>((ref) {
@@ -35,10 +35,10 @@ class PlayerController {
     // Every time the current item changes — tapping a track, skipping, or the
     // queue advancing on its own — log it so "recently played" and "most
     // played" have something to read back.
-    _mediaItemSubscription = _handler.mediaItem.listen((item) {
-      if (item != null) {
-        _ref.read(historyRepositoryProvider).recordPlay(item.id);
-      }
+    _mediaItemSubscription = _handler.mediaItem.listen((item) async {
+      if (item == null) return;
+      await _ref.read(historyRepositoryProvider).recordPlay(item.id);
+      _ref.read(historyTickProvider.notifier).bump();
     });
     _ref.onDispose(() => _mediaItemSubscription.cancel());
   }

@@ -19,10 +19,10 @@ class _LinksTickNotifier extends Notifier<int> {
   void bump() => state++;
 }
 
-final _linksTickProvider = NotifierProvider<_LinksTickNotifier, int>(_LinksTickNotifier.new);
+final folderLinksTickProvider = NotifierProvider<_LinksTickNotifier, int>(_LinksTickNotifier.new);
 
 final folderListProvider = Provider<List<FolderModel>>((ref) {
-  ref.watch(_linksTickProvider);
+  ref.watch(folderLinksTickProvider);
   final repository = ref.watch(folderRepositoryProvider);
   repository.ensureSystemFolders();
   return repository.getAllFolders();
@@ -37,12 +37,12 @@ final folderByIdProvider = Provider.family<FolderModel?, String>((ref, id) {
 });
 
 final isFavoriteProvider = Provider.family<bool, String>((ref, trackPath) {
-  ref.watch(_linksTickProvider);
+  ref.watch(folderLinksTickProvider);
   return ref.watch(folderRepositoryProvider).isFavorite(trackPath);
 });
 
 final folderTracksProvider = Provider.family<AsyncValue<List<Track>>, String>((ref, folderId) {
-  ref.watch(_linksTickProvider);
+  ref.watch(folderLinksTickProvider);
   final tracksAsync = ref.watch(libraryScanProvider);
   final repository = ref.watch(folderRepositoryProvider);
   final folder = repository.getFolder(folderId);
@@ -120,7 +120,14 @@ class FolderActions {
     _bumpLinks();
   }
 
-  void _bumpLinks() => _ref.read(_linksTickProvider.notifier).bump();
+  /// Lets other features (e.g. cleanup in Settings) tell the folder views
+  /// that links changed underneath them.
+  void notifyLinksChanged() {
+    _ref.invalidate(folderListProvider);
+    _bumpLinks();
+  }
+
+  void _bumpLinks() => _ref.read(folderLinksTickProvider.notifier).bump();
 }
 
 final folderActionsProvider = Provider<FolderActions>((ref) => FolderActions(ref));

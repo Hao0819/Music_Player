@@ -14,7 +14,7 @@ class SearchScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final query = ref.watch(searchQueryProvider);
-    final filter = ref.watch(libraryFilterProvider);
+    final filter = ref.watch(searchFilterProvider);
     final resultsAsync = ref.watch(searchResultsProvider);
     final folderActions = ref.read(folderActionsProvider);
 
@@ -41,7 +41,7 @@ class SearchScreen extends ConsumerWidget {
               isLabelVisible: filter.isActive,
               child: const Icon(Icons.tune),
             ),
-            onPressed: () => showFilterPanel(context),
+            onPressed: () => showFilterPanel(context, searchFilterProvider),
           ),
         ],
       ),

@@ -34,11 +34,30 @@ class HistoryRepository {
   }
 
   List<String> mostPlayedPaths({int limit = 50}) {
+    final sorted = playCounts().entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(limit).map((entry) => entry.key).toList();
+  }
+
+  /// How many times each track has been played, across the whole log.
+  Map<String, int> playCounts() {
     final counts = <String, int>{};
     for (final entry in _box.values) {
       counts[entry.trackPath] = (counts[entry.trackPath] ?? 0) + 1;
     }
-    final sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    return sorted.take(limit).map((entry) => entry.key).toList();
+    return counts;
+  }
+
+  Future<void> clear() => _box.clear();
+
+  int countEntriesFor(Set<String> paths) =>
+      _box.values.where((entry) => paths.contains(entry.trackPath)).length;
+
+  Future<void> removeEntriesFor(Set<String> paths) async {
+    final keys = <dynamic>[];
+    for (final key in _box.keys) {
+      final entry = _box.get(key);
+      if (entry != null && paths.contains(entry.trackPath)) keys.add(key);
+    }
+    await _box.deleteAll(keys);
   }
 }

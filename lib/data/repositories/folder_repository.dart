@@ -127,4 +127,18 @@ class FolderRepository {
   Set<String> getCategorizedPaths() {
     return _links.values.where((link) => link.folderId != favoritesFolderId).map((link) => link.trackPath).toSet();
   }
+
+  /// How many folder links point at any of [paths].
+  int countLinksFor(Set<String> paths) =>
+      _links.values.where((link) => paths.contains(link.trackPath)).length;
+
+  /// Drops every folder link for the given paths — used when cleaning up
+  /// after files that no longer exist.
+  Future<void> removeLinksFor(Set<String> paths) async {
+    final keys = _links.values
+        .where((link) => paths.contains(link.trackPath))
+        .map(_linkKeyFor)
+        .toList();
+    await _links.deleteAll(keys);
+  }
 }
