@@ -2,10 +2,13 @@ package com.example.music_player
 
 import android.database.Cursor
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.Executors
 
 /**
  * Adds a broader audio scan than `on_audio_query` performs.
@@ -28,23 +31,36 @@ class MainActivity : AudioServiceActivity() {
         )
     }
 
+    private val queryExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
-                "queryAudioFiles" -> {
+                // Scanning a real library walks thousands of MediaStore rows.
+                // Method-channel handlers run on the main thread, so doing that
+                // work here directly freezes the UI before it can paint a
+                // frame. Query on a worker and hand the result back on main.
+                "queryAudioFiles" -> queryExecutor.execute {
                     try {
-                        result.success(queryAudioFiles())
+                        val rows = queryAudioFiles()
+                        mainHandler.post { result.success(rows) }
                     } catch (error: Exception) {
                         // Never let a scan failure take down the library — the
                         // plugin's own results still stand on their own.
-                        result.error("QUERY_FAILED", error.message, null)
+                        mainHandler.post { result.error("QUERY_FAILED", error.message, null) }
                     }
                 }
                 else -> result.notImplemented()
             }
         }
+    }
+
+    override fun onDestroy() {
+        queryExecutor.shutdown()
+        super.onDestroy()
     }
 
     private fun queryAudioFiles(): List<Map<String, Any?>> {

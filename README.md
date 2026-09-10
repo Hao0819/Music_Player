@@ -128,6 +128,23 @@ they survive an **update** (installing a newer APK over the old one) but not an
 **uninstall** — Android deletes app-private data on uninstall. Install over the
 top to keep your folders.
 
+### Startup never blocks on the platform
+
+`main()` shows the UI as soon as Hive is open. Registering with `audio_service`
+happens *after* the first frame, because it binds an Android foreground
+service and some skins — MIUI especially — stall or refuse that binding. When
+it was awaited before `runApp`, a refusal meant a permanently white,
+unresponsive window with nothing on screen to explain it.
+
+Now the worst case is an app that plays audio without notification or
+lock-screen controls. Hive failures are caught too: a corrupt box is rebuilt
+rather than thrown, and anything still fatal renders the actual error on
+screen instead of a blank window.
+
+The native MediaStore scan likewise runs on a worker thread — method-channel
+handlers run on the main thread, so scanning a real library there froze the UI
+before it could paint.
+
 ### Scanning uses two sources
 
 `on_audio_query` only queries `MediaStore.Audio` on the primary volume, which
@@ -253,3 +270,8 @@ All eight modules from the original plan are built and verified on a device.
   placeholder package name `com.example.music_player`. Both need changing
   before distributing the app anywhere.
 - Notification artwork isn't shown yet; the notification uses the app icon.
+- On MIUI (Xiaomi / Redmi / POCO) the media notification and background
+  playback need **Autostart** enabled for the app in Security settings, and
+  battery saver set to **No restrictions**. Without those, Android blocks the
+  foreground service; the app still runs and plays, just without
+  notification and lock-screen controls.

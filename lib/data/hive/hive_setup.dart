@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'models/app_settings_model.dart';
@@ -25,11 +26,28 @@ Future<void> initHive() async {
   Hive.registerAdapter(PlayHistoryEntryAdapter());
   Hive.registerAdapter(AppSettingsModelAdapter());
 
-  await Future.wait([
-    Hive.openBox<FolderModel>(HiveBoxes.folders),
-    Hive.openBox<FolderTrackLink>(HiveBoxes.folderTrackLinks),
-    Hive.openBox<KnownTrackRecord>(HiveBoxes.knownTracks),
-    Hive.openBox<PlayHistoryEntry>(HiveBoxes.playHistory),
-    Hive.openBox<AppSettingsModel>(HiveBoxes.settings),
-  ]);
+  // Opened one at a time so a single unreadable box can be identified and
+  // rebuilt, instead of one bad file taking the whole app down at launch.
+  await _openBox<FolderModel>(HiveBoxes.folders);
+  await _openBox<FolderTrackLink>(HiveBoxes.folderTrackLinks);
+  await _openBox<KnownTrackRecord>(HiveBoxes.knownTracks);
+  await _openBox<PlayHistoryEntry>(HiveBoxes.playHistory);
+  await _openBox<AppSettingsModel>(HiveBoxes.settings);
+}
+
+/// Opens a box, and if its file is corrupt or was written by an incompatible
+/// schema, discards just that box and starts it fresh. Losing one box's
+/// contents is a far better outcome than an app that won't launch.
+Future<void> _openBox<T>(String name) async {
+  try {
+    await Hive.openBox<T>(name);
+  } catch (error) {
+    debugPrint('Hive box "$name" could not be opened, rebuilding it: $error');
+    try {
+      await Hive.deleteBoxFromDisk(name);
+    } catch (_) {
+      // If even deleting fails there is nothing more to try here.
+    }
+    await Hive.openBox<T>(name);
+  }
 }
