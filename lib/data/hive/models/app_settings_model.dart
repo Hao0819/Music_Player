@@ -13,9 +13,15 @@ class AppSettingsModel extends HiveObject {
   @HiveField(2)
   bool librarySortAscending;
 
+  /// 'none' | 'all' | 'one'. Nullable because settings saved by older
+  /// versions have no value here — null means the default, repeat all.
+  @HiveField(3)
+  String? repeatMode;
+
   AppSettingsModel({
     this.themeMode = 'system',
     this.librarySortField = 'title',
     this.librarySortAscending = true,
+    this.repeatMode,
   });
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../data/repositories/settings_repository.dart';
 import '../../../domain/track.dart';
 import '../../../services/audio/audio_player_handler.dart';
 import '../../library/providers/library_providers.dart';
@@ -69,15 +70,21 @@ class PlayerController {
 
   Future<void> removeQueueItemAt(int index) => _handler.removeQueueItemAt(index);
 
-  /// Cycles none -> all -> one -> none, matching the button's three icons.
-  Future<void> cycleRepeatMode() {
-    final current = _ref.read(playbackStateProvider).value?.repeatMode ?? AudioServiceRepeatMode.none;
+  /// Cycles all -> one -> none -> all, matching the button's three icons, and
+  /// remembers the choice across launches.
+  Future<void> cycleRepeatMode() async {
+    final current = _ref.read(playbackStateProvider).value?.repeatMode ?? AudioServiceRepeatMode.all;
     final next = switch (current) {
-      AudioServiceRepeatMode.none => AudioServiceRepeatMode.all,
       AudioServiceRepeatMode.all => AudioServiceRepeatMode.one,
-      _ => AudioServiceRepeatMode.none,
+      AudioServiceRepeatMode.one => AudioServiceRepeatMode.none,
+      _ => AudioServiceRepeatMode.all,
     };
-    return _handler.setRepeatMode(next);
+    await _handler.setRepeatMode(next);
+    await _ref.read(settingsRepositoryProvider).updateRepeatMode(switch (next) {
+      AudioServiceRepeatMode.one => 'one',
+      AudioServiceRepeatMode.none => 'none',
+      _ => 'all',
+    });
   }
 
   Future<void> toggleShuffle() {

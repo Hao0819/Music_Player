@@ -112,14 +112,22 @@ class FolderRepository {
   }
 
   /// Applies a new manual order to a folder from a freshly reordered path list.
+  /// Only links whose position actually moved are written, in one batch.
   Future<void> reorder(String folderId, List<String> orderedPaths) async {
+    final pending = <String, FolderTrackLink>{};
     for (var i = 0; i < orderedPaths.length; i++) {
-      final link = _links.get(_linkKey(folderId, orderedPaths[i]));
-      if (link != null) {
-        link.manualOrder = i;
-        await link.save();
-      }
+      final key = _linkKey(folderId, orderedPaths[i]);
+      final link = _links.get(key);
+      if (link == null || link.manualOrder == i) continue;
+
+      pending[key] = FolderTrackLink(
+        folderId: link.folderId,
+        trackPath: link.trackPath,
+        addedAt: link.addedAt,
+        manualOrder: i,
+      );
     }
+    if (pending.isNotEmpty) await _links.putAll(pending);
   }
 
   /// Track paths that belong to at least one user-created (non-Favorites)

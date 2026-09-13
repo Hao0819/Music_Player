@@ -20,4 +20,14 @@ class SettingsRepository {
     settings.themeMode = themeMode;
     await save(settings);
   }
+
+  /// Defaults to repeating the whole queue, so a folder or playlist loops
+  /// back to its first track instead of stopping after the last.
+  String get repeatMode => current.repeatMode ?? 'all';
+
+  Future<void> updateRepeatMode(String repeatMode) async {
+    final settings = current;
+    settings.repeatMode = repeatMode;
+    await save(settings);
+  }
 }

@@ -1,3 +1,4 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,12 +10,31 @@ import '../screens/now_playing_screen.dart';
 /// Slim bar docked above the bottom navigation. Renders nothing until
 /// something is actually playing.
 class MiniPlayer extends ConsumerWidget {
-  const MiniPlayer({super.key});
+  const MiniPlayer({super.key, this.isBottomMost = false});
+
+  /// True where the bar is the last thing on screen (folder, history and
+  /// new-audio pages). In the tab shell the navigation bar sits below it and
+  /// already clears the system bar; on its own, the bar must pad itself or its
+  /// buttons land inside Android's gesture area and taps get swallowed.
+  final bool isBottomMost;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final item = ref.watch(currentMediaItemProvider).value;
     if (item == null) return const SizedBox.shrink();
+
+    final bar = _buildBar(context, ref, item);
+    if (!isBottomMost) return bar;
+
+    // Paint the bar colour under the system gesture area too, so the padding
+    // reads as part of the bar rather than a gap.
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+      child: SafeArea(top: false, child: bar),
+    );
+  }
+
+  Widget _buildBar(BuildContext context, WidgetRef ref, MediaItem item) {
 
     final state = ref.watch(playbackStateProvider).value;
     final playing = state?.playing ?? false;

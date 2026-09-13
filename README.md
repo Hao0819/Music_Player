@@ -27,7 +27,8 @@ link — the file itself is untouched.
 ### Folders
 - Create, rename and delete folders
 - Long-press any track to multi-select, then batch-add to a folder
-- Drag to reorder tracks inside a folder (only in "Custom order" mode)
+- Drag tracks by their ☰ handle to reorder them inside a folder (only in
+  "Custom order" mode). The handle drags; long-press on the row still selects
 - Per-folder sort: custom / title / artist / album / date added / duration
 - Removing a track from a folder unlinks it only — the file and the main
   library entry are untouched
@@ -54,9 +55,11 @@ rather than created by hand:
 
 ### Playback
 - Play, pause, previous, next, seek
-- Shuffle, and repeat off / all / one
+- Shuffle, and repeat all / one / off — **repeat all is the default**, so a
+  folder loops back to its first song, and your choice is remembered
 - Queue view: reorder by dragging, remove items, jump to any track
-- Mini player docked above the navigation bar, expanding to a full player
+- Mini player docked above the navigation bar, expanding to a full player.
+  It also appears inside folders, history and new-audio screens
 - Background playback with notification and lock-screen controls
 
 ### New audio detection

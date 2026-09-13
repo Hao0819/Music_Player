@@ -7,6 +7,7 @@ import '../../folders/providers/folder_providers.dart';
 import '../../folders/widgets/add_to_folder_sheet.dart';
 import '../../library/widgets/track_tile.dart';
 import '../../player/providers/player_providers.dart';
+import '../../player/widgets/mini_player.dart';
 import '../providers/maintenance_providers.dart';
 
 final _newAudioSelectionProvider = NotifierProvider<SelectionNotifier, Set<String>>(SelectionNotifier.new);
@@ -39,6 +40,7 @@ class _NewAudioScreenState extends ConsumerState<NewAudioScreen> {
     final maintenance = ref.read(maintenanceActionsProvider);
 
     return Scaffold(
+      bottomNavigationBar: const MiniPlayer(isBottomMost: true),
       appBar: inSelectionMode
           ? AppBar(
               leading: IconButton(icon: const Icon(Icons.close), onPressed: selectionNotifier.clear),

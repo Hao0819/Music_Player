@@ -7,6 +7,7 @@ import '../../folders/providers/folder_providers.dart';
 import '../../folders/widgets/add_to_folder_sheet.dart';
 import '../../library/widgets/track_tile.dart';
 import '../../player/providers/player_providers.dart';
+import '../../player/widgets/mini_player.dart';
 import '../providers/history_providers.dart';
 
 final _historySelectionProvider = NotifierProvider<SelectionNotifier, Set<String>>(SelectionNotifier.new);
@@ -46,6 +47,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final playCounts = ref.watch(playCountsProvider);
 
     return Scaffold(
+      bottomNavigationBar: const MiniPlayer(isBottomMost: true),
       appBar: inSelectionMode
           ? AppBar(
               leading: IconButton(

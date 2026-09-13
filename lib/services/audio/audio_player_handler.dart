@@ -8,7 +8,11 @@ import '../../domain/track.dart';
 /// this through `PlayerController` rather than touching either package.
 class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   AudioPlayerHandler() {
-    _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+    // Forwarded with listen() rather than pipe(): pipe() holds the subject in
+    // addStream mode, where any other add() throws "Bad state". Repeat and
+    // shuffle need to push an updated state straight away, so the handler has
+    // to own the subject.
+    _player.playbackEventStream.listen((event) => playbackState.add(_transformEvent(event)));
 
     _player.currentIndexStream.listen((index) {
       final items = queue.value;
@@ -76,7 +80,9 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       AudioServiceRepeatMode.none => LoopMode.off,
       _ => LoopMode.all,
     });
-    playbackState.add(playbackState.value.copyWith(repeatMode: repeatMode));
+    // Changing loop mode doesn't emit a playback event, so publish the new
+    // state now instead of waiting for the next one.
+    playbackState.add(_transformEvent(_player.playbackEvent));
   }
 
   @override
@@ -84,7 +90,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     final enabled = shuffleMode != AudioServiceShuffleMode.none;
     if (enabled) await _player.shuffle();
     await _player.setShuffleModeEnabled(enabled);
-    playbackState.add(playbackState.value.copyWith(shuffleMode: shuffleMode));
+    playbackState.add(_transformEvent(_player.playbackEvent));
   }
 
   /// Reorders the queue, keeping the player's playlist and the media session's

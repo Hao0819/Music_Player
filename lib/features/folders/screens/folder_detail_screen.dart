@@ -9,6 +9,7 @@ import '../../../domain/track.dart';
 import '../../../widgets/empty_state.dart';
 import '../../library/widgets/track_tile.dart';
 import '../../player/providers/player_providers.dart';
+import '../../player/widgets/mini_player.dart';
 import '../providers/folder_providers.dart';
 import '../widgets/folder_name_dialog.dart';
 
@@ -67,6 +68,9 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
     );
 
     return Scaffold(
+      // Pushed over the tab shell, so it needs its own copy of the playback
+      // bar — otherwise playing from a folder hides the controls entirely.
+      bottomNavigationBar: const MiniPlayer(isBottomMost: true),
       appBar: inSelectionMode
           ? AppBar(
               leading: IconButton(
@@ -226,30 +230,62 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
   }
 }
 
-class _ReorderableTrackList extends ConsumerWidget {
+class _ReorderableTrackList extends ConsumerStatefulWidget {
   const _ReorderableTrackList({required this.folderId, required this.tracks});
 
   final String folderId;
   final List<Track> tracks;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ReorderableTrackList> createState() => _ReorderableTrackListState();
+}
+
+class _ReorderableTrackListState extends ConsumerState<_ReorderableTrackList> {
+  /// Local copy so a drop lands instantly. Saving the new order is async, and
+  /// rendering straight from the provider made the row snap back for a
+  /// moment before jumping to where it was dropped.
+  late List<Track> _tracks = [...widget.tracks];
+
+  @override
+  void didUpdateWidget(_ReorderableTrackList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.tracks, widget.tracks)) {
+      _tracks = [...widget.tracks];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return ReorderableListView.builder(
-      itemCount: tracks.length,
+      // The default drag gesture on mobile is long-press on the whole row,
+      // but long-press here already means "select". Leaving the default on
+      // meant selection always won and dragging never happened. Instead the
+      // handle drags immediately and long-press stays free for selecting.
+      buildDefaultDragHandles: false,
+      itemCount: _tracks.length,
       onReorderItem: (oldIndex, newIndex) {
-        final paths = tracks.map((track) => track.path).toList();
-        final moved = paths.removeAt(oldIndex);
-        paths.insert(newIndex, moved);
-        ref.read(folderActionsProvider).reorder(folderId, paths);
+        setState(() => _tracks.insert(newIndex, _tracks.removeAt(oldIndex)));
+        ref.read(folderActionsProvider).reorder(
+              widget.folderId,
+              [for (final track in _tracks) track.path],
+            );
       },
       itemBuilder: (context, index) {
-        final track = tracks[index];
+        final track = _tracks[index];
         return TrackTile(
           key: ValueKey(track.path),
           track: track,
           onLongPress: () => ref.read(_folderDetailSelectionProvider.notifier).toggle(track.path),
-          onTap: () => ref.read(playerControllerProvider).playTracks(tracks, initialIndex: index),
-          trailing: const Icon(Icons.drag_handle),
+          onTap: () => ref.read(playerControllerProvider).playTracks(_tracks, initialIndex: index),
+          trailing: ReorderableDragStartListener(
+            index: index,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Icon(Icons.drag_handle, color: scheme.onSurfaceVariant),
+            ),
+          ),
         );
       },
     );

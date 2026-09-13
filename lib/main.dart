@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/theme/app_theme.dart';
 import 'data/hive/hive_setup.dart';
+import 'data/repositories/settings_repository.dart';
 import 'features/player/providers/player_providers.dart';
 import 'services/audio/audio_player_handler.dart';
 
@@ -40,7 +41,21 @@ Future<void> main() async {
   // is never allowed to hold the app hostage. Worst case the app simply
   // plays without notification controls.
   unawaited(_registerAudioService(audioHandler));
+
+  // Restored after the first frame for the same reason: a preference must
+  // never be able to keep the app from appearing.
+  unawaited(
+    audioHandler
+        .setRepeatMode(_repeatModeFromName(SettingsRepository().repeatMode))
+        .catchError((Object error) => debugPrint('Could not restore repeat mode: $error')),
+  );
 }
+
+AudioServiceRepeatMode _repeatModeFromName(String name) => switch (name) {
+      'none' => AudioServiceRepeatMode.none,
+      'one' => AudioServiceRepeatMode.one,
+      _ => AudioServiceRepeatMode.all,
+    };
 
 Future<void> _registerAudioService(AudioPlayerHandler handler) async {
   try {
