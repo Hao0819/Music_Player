@@ -1,7 +1,13 @@
 # Music Player
 
 A local audio player for Android, built with Flutter. It plays the audio files
-already on your device — no streaming, no account, nothing leaves the phone.
+already on your device — no streaming service, no account, no cloud library.
+
+One optional feature breaks the "purely local" rule: a built-in **downloader**
+that pulls audio off a link using a copy of yt-dlp embedded in the APK. It is
+the only part of the app that touches the network, it only ever downloads, and
+nothing about your library is uploaded anywhere. See
+[Downloading](#downloading) for what it does and the conditions attached.
 
 Its main idea is that **organizing your music never touches your files**. You
 group tracks into folders inside the app; those groupings live in a local
@@ -16,6 +22,9 @@ link — the file itself is untouched.
 - Scans on-device audio via MediaStore (m4a, mp3, wav, flac and others),
   including folders like `Download/MusicDownload` and secondary volumes
 - Search box and the same filter panel the Search tab uses
+- One-tap chips: **All / In a folder / Not in a folder**
+- Songs filed into folders show the folder names on their row (Favorites is
+  left out, since the heart already shows it)
 - Sort by title, artist, album, date added or duration, ascending or descending
 - Total song count above the list
 - A–Z index down the right edge — tap or drag a letter to jump straight to
@@ -60,7 +69,15 @@ rather than created by hand:
 - Queue view: reorder by dragging, remove items, jump to any track
 - Mini player docked above the navigation bar, expanding to a full player.
   It also appears inside folders, history and new-audio screens
+- Next / previous start playback, so skipping from a paused or just-restored
+  player plays the track you skipped to
+- Play and Shuffle buttons at the top of every folder
+- The row of the currently playing track is highlighted in every list
 - Background playback with notification and lock-screen controls
+- **Resumes where you left off**: reopening the app brings back the last queue,
+  song and position, paused. Saved on every pause, every 5 seconds while
+  playing, and whenever the app leaves the screen, so it survives the system
+  killing the app
 
 ### New audio detection
 - Each scan is diffed against a record of files already seen. New arrivals get
@@ -69,13 +86,88 @@ rather than created by hand:
   seen" to dismiss
 - Your existing library on first install is the baseline, not "new"
 
+### Downloading
+- Paste a link in **Settings → Download audio from a link** and get a tagged
+  audio file in `Music/MusicPlayer/`, indexed by MediaStore so it shows up in
+  your library like any other track
+- Choose **MP3 / M4A / Opus**; the video stream is never downloaded, only the
+  best audio-only format
+- Live progress, ETA and per-download cancel
+- **Update yt-dlp** button — sites change how they serve media often enough to
+  break extraction between app releases, so the extractor can be refreshed
+  without shipping a new APK
+- Download history can be hidden (the choice is remembered), cleared in one go,
+  or removed row by row with a left swipe. Anything still downloading is never
+  hidden or removable — cancel it first
+
+### Appearance
+- Light / dark / follow-system theme, on a blue Material colour scheme. The
+  secondary tones are pinned to blue by hand, because even a blue seed leaves
+  Material's "vibrant" variant with violet chips and navigation indicators
+- Your own folders are a grid of gradient cards, each folder keeping its own
+  colour from a hash of its name; folders open on a matching hero header with
+  track count, total duration and Play / Shuffle
+- The library has a Shuffle-all header, and the mini player is a rounded card
+  floating above the navigation bar with a gradient play button
+- The Now Playing scrubber is drawn as a waveform. Its shape comes from a hash
+  of the track id, **not** from the audio — decoding every file for real
+  amplitudes would be far too slow on a phone. It is stable per track, so a
+  song always looks the same.
+
 ### Settings
-- Light / dark / follow-system theme
 - **Rescan device** on demand
 - **Clean up missing files** — removes folder links and history entries left
   behind by audio that is no longer on the device, telling you exactly how many
   of each will go. Never touches files or your other folders
-- App version and a note that nothing leaves the device
+- **Download audio from a link** — see [Downloading](#downloading)
+- App version and a note that your library stays on the device
+
+---
+
+## Installing
+
+There is no prebuilt APK to download — you build it yourself. You need a
+machine with the [Flutter SDK](https://docs.flutter.dev/get-started/install)
+installed, and an Android phone running **Android 6.0 (API 23) or newer**.
+
+```bash
+git clone https://github.com/Hao0819/Music_Player.git
+cd Music_Player
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter build apk --release --split-per-abi
+```
+
+If that last step fails on Windows with `An Application Control policy has
+blocked this file`, add `--no-tree-shake-icons` — see
+[Building an APK](#building-an-apk) for why.
+
+It writes one APK per architecture to `build/app/outputs/flutter-apk/`:
+
+| File | For |
+|---|---|
+| `app-arm64-v8a-release.apk` | Any phone from roughly 2019 onward — pick this one |
+| `app-armeabi-v7a-release.apk` | Older 32-bit devices |
+
+Then either plug the phone in over USB with USB debugging enabled and run
+`flutter install --release`, or copy the APK onto the phone and open it,
+allowing "install from unknown sources" when prompted.
+
+### After installing
+
+- **Grant the audio permission** on first launch, or the library stays empty.
+- **Update by installing the new APK over the old one.** Uninstalling deletes
+  your folders and favorites — Android wipes app-private data on uninstall, and
+  there is no export yet.
+- The APK is signed with Flutter's **debug keys**, which is fine for personal
+  use but means a build signed with any other key cannot be installed over it
+  later without uninstalling first.
+- On **MIUI / HyperOS** (Xiaomi, Redmi, POCO), enable **Autostart** for the app
+  and set battery saver to **No restrictions**. Otherwise Android blocks the
+  foreground service and you lose the media notification and lock-screen
+  controls — playback itself still works.
+- The **downloader** unpacks its Python runtime the first time you open the
+  download screen, which takes a few seconds. That happens once.
 
 ---
 
@@ -90,8 +182,13 @@ rather than created by hand:
 | State management | `flutter_riverpod` |
 | Runtime permissions | `permission_handler` |
 | App version in Settings | `package_info_plus` |
+| Launcher icon generation | `flutter_launcher_icons` |
+| Native splash screen | `flutter_native_splash` |
+| Downloader (embedded Python + yt-dlp) | `io.github.junkfood02.youtubedl-android:library` |
+| Audio extraction / transcoding for downloads | `io.github.junkfood02.youtubedl-android:ffmpeg` |
 
-Android only — iOS is out of scope.
+Android only — iOS is out of scope. The downloader is doubly so: it runs a
+Python build compiled for Android, so it has no equivalent on other platforms.
 
 ---
 
@@ -116,7 +213,8 @@ Hive only ever holds **links and bookkeeping**:
 | `folder_track_links` | folder id ↔ track **file path**, added date, manual order |
 | `known_tracks` | files seen in previous scans, for new/deleted diffing |
 | `play_history` | append-only play log |
-| `settings` | theme mode, library sort preference |
+| `settings` | theme mode, library sort preference, repeat mode, download-history visibility |
+| `playback_session` | last queue (paths), current track, position |
 
 Titles, artists, artwork and durations are always re-read live from
 `on_audio_query` at render time. Nothing is duplicated into the database, so a
@@ -164,6 +262,21 @@ are dropped — see `_excludedPathFragments` in `audio_library_repository.dart`.
 Favorites is implemented as a folder with `isSystem: true` rather than a
 separate table, so it reuses the same linking code as every other folder.
 
+### Downloads re-enter through MediaStore, not a side door
+
+`YtdlpBridge.kt` runs yt-dlp into a private scratch directory, then **publishes
+the finished file into the shared `Music/MusicPlayer/` collection** via a
+MediaStore insert (`getExternalFilesDir` on pre-Android-10, which has no insert
+API and would otherwise need a storage permission).
+
+That is the whole integration: a downloaded track is an ordinary file the
+normal scan finds, so folders, favorites, history and search work on it with no
+special-casing anywhere. The Dart side only triggers a library refresh when a
+download completes.
+
+Progress arrives on an `EventChannel` keyed by a download id, because a
+`MethodChannel` reply can only fire once and a download reports for minutes.
+
 ### Project layout
 
 ```
@@ -181,11 +294,13 @@ lib/
     favorites_history/          recently played / most played views
     search/                     search + filter panel
     player/                     player controller, mini player, now playing, queue
+    download/                   link input, download queue, history hide/clear
     settings/                   theme, rescan, cleanup, new-audio screen, about
   services/
     audio/                      AudioPlayerHandler (just_audio + audio_service)
     permissions/                permission service + provider
     scanning/                   bridge to the native MediaStore query
+    download/                   bridge to the embedded yt-dlp
   widgets/                      shared: artwork, empty state, permission gate
 ```
 
@@ -206,11 +321,52 @@ Regenerate adapters (`*.g.dart`) any time you change a `@HiveType` model.
 ### Building an APK
 
 ```bash
-flutter build apk --release
-# output: build/app/outputs/flutter-apk/app-release.apk
+flutter build apk --release --no-tree-shake-icons --split-per-abi
+# output: build/app/outputs/flutter-apk/app-<abi>-release.apk
 ```
 
+Both flags are load-bearing:
+
+- **`--split-per-abi`** produces one APK per architecture (~45 MB each) instead
+  of one fat APK (~114 MB). The downloader ships a Python runtime and an FFmpeg
+  build *per ABI*, roughly 30 MB apiece, so the ABI list dominates the APK
+  size. Install `app-arm64-v8a-release.apk` on any phone from roughly 2019
+  onward; `app-armeabi-v7a-release.apk` covers older 32-bit devices.
+
+  Note that `abiFilters` in `build.gradle.kts` will *not* do this: the Flutter
+  Gradle plugin assigns that itself from `--target-platform`, anything added
+  there only unions with it, and `--target-platform` in turn only governs
+  Flutter's own engine — the downloader AAR's other architectures ride along
+  regardless. Splitting is what actually drops them.
+
+- **`--no-tree-shake-icons`** is only needed on Windows machines where
+  **Smart App Control** or a WDAC policy blocks Flutter's unsigned
+  `font-subset.exe`. Release builds run icon tree-shaking through that binary,
+  and the block surfaces as
+  `Target aot_android_asset_bundle failed: ... An Application Control policy
+  has blocked this file`. Skipping tree-shaking ships the full Material icon
+  font (~1.6 MB) and sidesteps it. Drop the flag if your machine allows the
+  binary to run.
+
 To install straight onto a connected phone: `flutter install --release`.
+
+### App icon and splash screen
+
+Both are generated from `assets/icon/source.jpeg`:
+
+```bash
+dart run tool/prep_icons.dart        # source.jpeg -> the four PNGs below
+dart run flutter_launcher_icons
+dart run flutter_native_splash:create
+```
+
+`prep_icons.dart` writes `app_icon.png` (legacy launcher icon),
+`app_icon_foreground.png` (adaptive-icon foreground, deliberately full-bleed
+because `flutter_launcher_icons` applies its own 16% safe-zone inset),
+`splash_android12.png` (1152 px with the art inset to 768 px for Android 12's
+circular mask) and `splash_logo.png`. It also snaps the near-black JPEG
+backdrop to true `#000000`, without which compression noise shows as a faint
+square against the black splash and icon backgrounds.
 
 ### Checks
 
@@ -239,6 +395,22 @@ A few non-obvious things live in `android/`, each there for a specific reason:
   `afterEvaluate` is too late — AGP has already locked the value).
 - **`gradle.properties`** disables Kotlin incremental compilation, which crashes
   on Windows when the project and the pub cache sit on different drives.
+- **The downloader's Gradle setup** needs four things that are easy to miss:
+  `useLegacyPackaging = true` (its Python and FFmpeg payloads are unzipped out
+  of the APK at first launch, which only works when the native libs are stored
+  extractably), `extractNativeLibs="true"` in the manifest for the same reason,
+  `keepDebugSymbols` exclusions for `libpython.zip.so` / `libffmpeg.zip.so`
+  (they are zip archives named `.so` so they get packaged at all, and the NDK
+  strip step errors on them otherwise), and the `INTERNET` permission.
+- **`proguard-rules.pro` keeps `org.apache.commons.compress`.** yt-dlp's
+  payloads are unzipped with commons-compress, whose `ExtraFieldUtils`
+  registers field types reflectively in a static initializer. Without the keep
+  rule R8 sees classes like `AsiExtraField` as never instantiated, makes them
+  non-concrete, and the unpack dies with `RuntimeException: class ... is not a
+  concrete class` — wrapped in an `ExceptionInInitializerError`, which is an
+  `Error`, not an `Exception`. `YtdlpBridge` therefore catches `Throwable`
+  throughout: letting one escape a pool thread kills the process instead of
+  failing one call.
 - **`permission_handler` is pinned to 11.4.0.** Newer versions require
   `compileSdk 37`, which current SDK installs expose only as `android-37.x`
   folders that AGP cannot resolve as a plain `compileSdk = 37`.
@@ -260,6 +432,9 @@ Built and verified:
 
 All eight modules from the original plan are built and verified on a device.
 
+Added since: app icon and splash screen, and the yt-dlp downloader
+(downloading, cancelling and history hide/clear all verified on a device).
+
 ### Known limitations
 
 - The **"recently played" filter** returns nothing until you've actually played
@@ -273,6 +448,19 @@ All eight modules from the original plan are built and verified on a device.
   placeholder package name `com.example.music_player`. Both need changing
   before distributing the app anywhere.
 - Notification artwork isn't shown yet; the notification uses the app icon.
+- **Downloading from YouTube violates its Terms of Service**, whatever tool is
+  used. That is why apps of this kind are not on Google Play, and it applies to
+  this one. Decide for yourself whether to keep the feature.
+- **Download history lives in memory only** and is gone when the app is killed.
+  Hiding and clearing it work within a session; there is no persisted log.
+- **The downloader roughly doubles the APK.** ~45 MB per-ABI versus ~22 MB
+  before it existed.
+- During yt-dlp's extraction and FFmpeg transcoding phases **no percentage is
+  reported** — the progress bar sits at 0% and then at 100% while real work
+  continues. On a long track the transcode alone can run for a minute and look
+  stalled.
+- Extraction **will break eventually** as sites change; use the in-app
+  **Update yt-dlp** button rather than waiting for an app release.
 - On MIUI (Xiaomi / Redmi / POCO) the media notification and background
   playback need **Autostart** enabled for the app in Security settings, and
   battery saver set to **No restrictions**. Without those, Android blocks the

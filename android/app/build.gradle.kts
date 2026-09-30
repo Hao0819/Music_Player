@@ -27,6 +27,31 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // NOTE: youtubedl-android ships a ~30 MB Python runtime and FFmpeg
+        // build per ABI, so the ABI list dominates APK size. abiFilters is
+        // deliberately not set here: the Flutter Gradle plugin assigns it
+        // from --target-platform and anything added here only unions with
+        // that, and --target-platform in turn only covers Flutter's own
+        // engine — the AAR's x86_64 payload rides along regardless. Splitting
+        // is what actually drops it, and is how release builds should be made:
+        //   flutter build apk --split-per-abi
+    }
+
+    packaging {
+        jniLibs {
+            // The Python/FFmpeg binaries are unzipped out of the APK on
+            // first launch, which only works with legacy packaging.
+            useLegacyPackaging = true
+            // The Python/FFmpeg payloads are zip archives named .so so
+            // that they get packaged at all. They aren't ELF objects, so
+            // the NDK strip step errors out on them unless excluded.
+            keepDebugSymbols += listOf(
+                "**/libpython.zip.so",
+                "**/libffmpeg.zip.so",
+                "**/libaria2c.zip.so",
+            )
+        }
     }
 
     buildTypes {
@@ -34,6 +59,10 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
@@ -46,4 +75,11 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Embeds a Python 3 runtime plus yt-dlp, and runs them on-device.
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    // Needed to extract/transcode the audio stream into a tagged MP3.
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.17.2")
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../download/screens/download_screen.dart';
 import '../../library/providers/library_providers.dart';
 import '../providers/maintenance_providers.dart';
 import '../providers/theme_mode_provider.dart';
@@ -65,6 +66,18 @@ class SettingsScreen extends ConsumerWidget {
             ),
             enabled: !stale.isEmpty,
             onTap: stale.isEmpty ? null : () => _confirmCleanup(context, ref, stale),
+          ),
+          const Divider(height: 32),
+
+          _SectionHeader(title: 'Download'),
+          ListTile(
+            leading: const Icon(Icons.download_outlined),
+            title: const Text('Download audio from a link'),
+            subtitle: const Text('Saves to Music/MusicPlayer and adds it to your library'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const DownloadScreen()),
+            ),
           ),
           const Divider(height: 32),
 

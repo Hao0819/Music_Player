@@ -33,9 +33,12 @@ class MainActivity : AudioServiceActivity() {
 
     private val queryExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var ytdlpBridge: YtdlpBridge? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        ytdlpBridge = YtdlpBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -59,6 +62,7 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun onDestroy() {
+        ytdlpBridge?.dispose()
         queryExecutor.shutdown()
         super.onDestroy()
     }

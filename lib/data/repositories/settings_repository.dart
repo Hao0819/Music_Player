@@ -30,4 +30,12 @@ class SettingsRepository {
     settings.repeatMode = repeatMode;
     await save(settings);
   }
+
+  bool get downloadHistoryHidden => current.downloadHistoryHidden ?? false;
+
+  Future<void> updateDownloadHistoryHidden(bool hidden) async {
+    final settings = current;
+    settings.downloadHistoryHidden = hidden;
+    await save(settings);
+  }
 }

@@ -18,10 +18,17 @@ class AppSettingsModel extends HiveObject {
   @HiveField(3)
   String? repeatMode;
 
+  /// Collapses the download screen's history list. Nullable for the same
+  /// reason as [repeatMode] — settings written by older versions have no
+  /// value here, and null means shown.
+  @HiveField(4)
+  bool? downloadHistoryHidden;
+
   AppSettingsModel({
     this.themeMode = 'system',
     this.librarySortField = 'title',
     this.librarySortAscending = true,
     this.repeatMode,
+    this.downloadHistoryHidden,
   });
 }
