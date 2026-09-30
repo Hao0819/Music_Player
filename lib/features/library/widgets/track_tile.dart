@@ -15,7 +15,17 @@ class TrackTile extends StatelessWidget {
     this.selected = false,
     this.isFavorite = false,
     this.onFavoriteToggle,
+    this.folderNames = const [],
+    this.isCurrent = false,
   });
+
+  /// Marks the row as the track the player is on, so it stands out in a list.
+  final bool isCurrent;
+
+  /// User folders this track is filed in. Shown ahead of the artist so they
+  /// survive truncation, while keeping the row at its usual fixed height
+  /// (the Library's A–Z index relies on that).
+  final List<String> folderNames;
 
   final Track track;
   final VoidCallback? onTap;
@@ -40,8 +50,43 @@ class TrackTile extends StatelessWidget {
               ),
             )
           : ArtworkImage(trackId: track.id, size: 50),
-      title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text('${track.artist} · ${track.album}', maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Row(
+        children: [
+          if (isCurrent)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(Icons.graphic_eq, size: 16, color: scheme.primary),
+            ),
+          Expanded(
+            child: Text(
+              track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: isCurrent ? TextStyle(color: scheme.primary, fontWeight: FontWeight.w700) : null,
+            ),
+          ),
+        ],
+      ),
+      subtitle: folderNames.isEmpty
+          ? Text('${track.artist} · ${track.album}', maxLines: 1, overflow: TextOverflow.ellipsis)
+          : Text.rich(
+              TextSpan(children: [
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.middle,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 3),
+                    child: Icon(Icons.folder, size: 14, color: scheme.primary),
+                  ),
+                ),
+                TextSpan(
+                  text: folderNames.join(', '),
+                  style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
+                ),
+                TextSpan(text: ' · ${track.artist}'),
+              ]),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
       trailing: trailing ??
           Row(
             mainAxisSize: MainAxisSize.min,

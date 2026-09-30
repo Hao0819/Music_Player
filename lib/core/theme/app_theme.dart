@@ -1,12 +1,30 @@
 import 'package:flutter/material.dart';
 
-/// One design language across light and dark: a muted teal-blue seed, soft
-/// rounded surfaces, and generous spacing. Deliberately not the purple
+/// One design language across light and dark: a bright blue seed, soft
+/// rounded surfaces and gradient accents. Deliberately not the purple
 /// Material default, and not a copy of any existing player.
 class AppTheme {
   AppTheme._();
 
-  static const _seed = Color(0xFF2F6D7A);
+  static const _seed = Color(0xFF2F6BFF);
+
+  /// Paired with the seed for gradients on headers and the play button.
+  static const gradientStart = Color(0xFF2F6BFF);
+  static const gradientEnd = Color(0xFF00C6FB);
+
+  /// Deterministic gradient for a folder tile, so each folder keeps its own
+  /// colour instead of every card looking identical.
+  static List<Color> gradientFor(String seed) {
+    const palettes = [
+      [Color(0xFF2F6BFF), Color(0xFF00C6FB)],
+      [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+      [Color(0xFF0EA5E9), Color(0xFF22D3EE)],
+      [Color(0xFF0D9488), Color(0xFF2F6BFF)],
+      [Color(0xFF0369A1), Color(0xFF38BDF8)],
+      [Color(0xFF1D4ED8), Color(0xFF60A5FA)],
+    ];
+    return palettes[seed.hashCode.abs() % palettes.length];
+  }
 
   /// Shared corner radii, so tiles, sheets and artwork agree.
   static const radiusSmall = 10.0;
@@ -17,8 +35,22 @@ class AppTheme {
   static ThemeData dark() => _build(Brightness.dark);
 
   static ThemeData _build(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
+    // "vibrant" keeps far more of the seed's chroma than the default tonal
+    // scheme, which is what makes the accents actually read as colourful.
     final isDark = brightness == Brightness.dark;
+
+    // Even a blue seed leaves "vibrant" with violet secondary tones, and those
+    // are exactly the surfaces that read as purple: selected chips, the
+    // navigation indicator, badges. Pin them back to blue.
+    final scheme = ColorScheme.fromSeed(
+      seedColor: _seed,
+      brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.vibrant,
+    ).copyWith(
+      secondary: isDark ? const Color(0xFF9DC0FF) : const Color(0xFF2B5CB8),
+      secondaryContainer: isDark ? const Color(0xFF17376B) : const Color(0xFFD7E3FF),
+      onSecondaryContainer: isDark ? const Color(0xFFD7E3FF) : const Color(0xFF0B2C63),
+    );
 
     return ThemeData(
       useMaterial3: true,

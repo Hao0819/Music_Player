@@ -33,16 +33,28 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   /// Replaces the queue with [tracks] and starts playing at [initialIndex].
   Future<void> playTracks(List<Track> tracks, {int initialIndex = 0}) async {
     if (tracks.isEmpty) return;
+    await _loadQueue(tracks, initialIndex: initialIndex);
+    await _player.play();
+  }
 
+  /// Puts a previous session back — same queue, same track, same position —
+  /// but paused, so opening the app never starts making noise on its own.
+  Future<void> restoreTracks(List<Track> tracks, {required int initialIndex, Duration position = Duration.zero}) {
+    if (tracks.isEmpty) return Future.value();
+    return _loadQueue(tracks, initialIndex: initialIndex, position: position);
+  }
+
+  Future<void> _loadQueue(List<Track> tracks, {required int initialIndex, Duration position = Duration.zero}) async {
+    final index = initialIndex.clamp(0, tracks.length - 1);
     final items = tracks.map(_toMediaItem).toList();
     queue.add(items);
-    mediaItem.add(items[initialIndex.clamp(0, items.length - 1)]);
+    mediaItem.add(items[index]);
 
     await _player.setAudioSources(
       [for (final track in tracks) AudioSource.file(track.path)],
-      initialIndex: initialIndex.clamp(0, tracks.length - 1),
+      initialIndex: index,
+      initialPosition: position,
     );
-    await _player.play();
   }
 
   @override
@@ -54,11 +66,20 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   @override
   Future<void> seek(Duration position) => _player.seek(position);
 
+  // Skipping starts playback rather than just moving the marker. Pressing
+  // next on a paused player — after a restored session, say — should play the
+  // track you skipped to, not sit there silently on it.
   @override
-  Future<void> skipToNext() => _player.seekToNext();
+  Future<void> skipToNext() async {
+    await _player.seekToNext();
+    await _player.play();
+  }
 
   @override
-  Future<void> skipToPrevious() => _player.seekToPrevious();
+  Future<void> skipToPrevious() async {
+    await _player.seekToPrevious();
+    await _player.play();
+  }
 
   @override
   Future<void> skipToQueueItem(int index) async {

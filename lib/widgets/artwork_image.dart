@@ -76,15 +76,23 @@ class _ArtworkImageState extends ConsumerState<ArtworkImage> {
     final bytes = _bytes;
 
     if (bytes == null || bytes.isEmpty) {
-      // Deliberately reads as "this track has no cover" rather than as a
-      // stand-in picture: outlined and muted, not a solid coloured tile.
+      // Still reads as "this track has no cover" — outlined and muted, not a
+      // stand-in picture. The faint tint only keeps a screenful of them from
+      // being a wall of flat grey.
       return Container(
         width: widget.size,
         height: widget.size,
         decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(widget.borderRadius),
           border: Border.all(color: scheme.outlineVariant),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color.alphaBlend(scheme.primary.withValues(alpha: 0.14), scheme.surfaceContainerHighest),
+              scheme.surfaceContainerHighest,
+            ],
+          ),
         ),
         child: Icon(
           Icons.music_off_outlined,

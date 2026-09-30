@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,7 +37,10 @@ class PlayerController {
     // Every time the current item changes — tapping a track, skipping, or the
     // queue advancing on its own — log it so "recently played" and "most
     // played" have something to read back.
-    _mediaItemSubscription = _handler.mediaItem.listen((item) async {
+    // skip(1): the subject replays its current item to new listeners. After a
+    // restored session that item was only loaded, not played, so it mustn't
+    // be logged as a play.
+    _mediaItemSubscription = _handler.mediaItem.skip(1).listen((item) async {
       if (item == null) return;
       await _ref.read(historyRepositoryProvider).recordPlay(item.id);
       _ref.read(historyTickProvider.notifier).bump();
@@ -51,6 +55,14 @@ class PlayerController {
 
   Future<void> playTracks(List<Track> tracks, {int initialIndex = 0}) {
     return _handler.playTracks(tracks, initialIndex: initialIndex);
+  }
+
+  /// Starts a list on a random track with shuffle turned on. Shuffle is set
+  /// after loading, since it shuffles the queue that is actually loaded.
+  Future<void> shufflePlay(List<Track> tracks) async {
+    if (tracks.isEmpty) return;
+    await _handler.playTracks(tracks, initialIndex: Random().nextInt(tracks.length));
+    await _handler.setShuffleMode(AudioServiceShuffleMode.all);
   }
 
   Future<void> togglePlayPause() {

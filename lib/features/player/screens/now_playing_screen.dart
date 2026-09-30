@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/duration_format.dart';
 import '../../../widgets/artwork_image.dart';
 import '../../../widgets/empty_state.dart';
@@ -9,6 +10,7 @@ import '../../folders/providers/folder_providers.dart';
 import '../../library/providers/library_providers.dart';
 import '../providers/player_providers.dart';
 import '../widgets/queue_sheet.dart';
+import '../widgets/waveform_seek_bar.dart';
 
 class NowPlayingScreen extends ConsumerWidget {
   const NowPlayingScreen({super.key});
@@ -16,7 +18,8 @@ class NowPlayingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final item = ref.watch(currentMediaItemProvider).value;
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     if (item == null) {
       return Scaffold(
@@ -31,7 +34,7 @@ class NowPlayingScreen extends ConsumerWidget {
 
     final state = ref.watch(playbackStateProvider).value;
     final playing = state?.playing ?? false;
-    final repeatMode = state?.repeatMode ?? AudioServiceRepeatMode.none;
+    final repeatMode = state?.repeatMode ?? AudioServiceRepeatMode.all;
     final shuffleOn = (state?.shuffleMode ?? AudioServiceShuffleMode.none) != AudioServiceShuffleMode.none;
     final position = ref.watch(playbackPositionProvider).value ?? Duration.zero;
     final duration = item.duration ?? Duration.zero;
@@ -46,6 +49,7 @@ class NowPlayingScreen extends ConsumerWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text('Now playing'),
+        centerTitle: true,
         actions: [
           IconButton(
             tooltip: 'Queue',
@@ -55,114 +59,167 @@ class NowPlayingScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              const Spacer(),
-              LayoutBuilder(
-                builder: (context, constraints) => ArtworkImage(
-                  trackId: track?.id,
-                  size: constraints.maxWidth,
-                  borderRadius: 20,
-                  iconSize: 96,
-                ),
-              ),
-              const Spacer(),
-              Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Artwork takes what's left after the controls, so short screens
+            // shrink the cover instead of overflowing.
+            final artworkSize = (constraints.maxHeight - 330).clamp(140.0, constraints.maxWidth - 48);
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${item.artist ?? 'Unknown artist'} · ${item.album ?? 'Unknown album'}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: scheme.onSurfaceVariant),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                      boxShadow: [
+                        BoxShadow(
+                          color: scheme.primary.withValues(alpha: 0.28),
+                          blurRadius: 40,
+                          spreadRadius: -8,
+                          offset: const Offset(0, 18),
                         ),
                       ],
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
-                    color: isFavorite ? scheme.primary : scheme.onSurfaceVariant,
-                    onPressed: () => ref.read(folderActionsProvider).toggleFavorite(item.id),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Slider(
-                min: 0,
-                max: duration.inMilliseconds.toDouble().clamp(1, double.infinity),
-                value: position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble()),
-                onChanged: (value) => controller.seek(Duration(milliseconds: value.round())),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(formatDuration(position), style: Theme.of(context).textTheme.bodySmall),
-                    Text(formatDuration(duration), style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    tooltip: shuffleOn ? 'Shuffle on' : 'Shuffle off',
-                    icon: const Icon(Icons.shuffle),
-                    color: shuffleOn ? scheme.primary : scheme.onSurfaceVariant,
-                    onPressed: controller.toggleShuffle,
-                  ),
-                  IconButton(
-                    iconSize: 40,
-                    icon: const Icon(Icons.skip_previous),
-                    onPressed: controller.previous,
-                  ),
-                  IconButton.filled(
-                    iconSize: 40,
-                    icon: Icon(playing ? Icons.pause : Icons.play_arrow),
-                    onPressed: controller.togglePlayPause,
-                  ),
-                  IconButton(
-                    iconSize: 40,
-                    icon: const Icon(Icons.skip_next),
-                    onPressed: controller.next,
-                  ),
-                  IconButton(
-                    tooltip: switch (repeatMode) {
-                      AudioServiceRepeatMode.one => 'Repeat one',
-                      AudioServiceRepeatMode.none => 'Repeat off',
-                      _ => 'Repeat all',
-                    },
-                    icon: Icon(
-                      repeatMode == AudioServiceRepeatMode.one ? Icons.repeat_one : Icons.repeat,
+                    child: ArtworkImage(
+                      trackId: track?.id,
+                      size: artworkSize,
+                      borderRadius: AppTheme.radiusLarge,
+                      iconSize: artworkSize * 0.3,
                     ),
-                    color: repeatMode == AudioServiceRepeatMode.none ? scheme.onSurfaceVariant : scheme.primary,
-                    onPressed: controller.cycleRepeatMode,
+                  ),
+                  const SizedBox(height: 28),
+                  Row(
+                    children: [
+                      const SizedBox(width: 40),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Text(
+                              item.title,
+                              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              item.artist ?? 'Unknown artist',
+                              style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
+                        icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
+                        color: isFavorite ? scheme.primary : scheme.onSurfaceVariant,
+                        onPressed: () => ref.read(folderActionsProvider).toggleFavorite(item.id),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  WaveformSeekBar(
+                    seed: item.id,
+                    position: position,
+                    duration: duration,
+                    onSeek: controller.seek,
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(formatDuration(position), style: theme.textTheme.bodySmall),
+                      Text(formatDuration(duration), style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      IconButton(
+                        tooltip: shuffleOn ? 'Shuffle on' : 'Shuffle off',
+                        icon: const Icon(Icons.shuffle),
+                        color: shuffleOn ? scheme.primary : scheme.onSurfaceVariant,
+                        onPressed: controller.toggleShuffle,
+                      ),
+                      IconButton(
+                        iconSize: 38,
+                        icon: const Icon(Icons.skip_previous),
+                        onPressed: controller.previous,
+                      ),
+                      _PlayButton(playing: playing, onPressed: controller.togglePlayPause),
+                      IconButton(
+                        iconSize: 38,
+                        icon: const Icon(Icons.skip_next),
+                        onPressed: controller.next,
+                      ),
+                      IconButton(
+                        tooltip: switch (repeatMode) {
+                          AudioServiceRepeatMode.one => 'Repeat one',
+                          AudioServiceRepeatMode.none => 'Repeat off',
+                          _ => 'Repeat all',
+                        },
+                        icon: Icon(
+                          repeatMode == AudioServiceRepeatMode.one ? Icons.repeat_one : Icons.repeat,
+                        ),
+                        color: repeatMode == AudioServiceRepeatMode.none
+                            ? scheme.onSurfaceVariant
+                            : scheme.primary,
+                        onPressed: controller.cycleRepeatMode,
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({required this.playing, required this.onPressed});
+
+  final bool playing;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 76,
+        height: 76,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            colors: [AppTheme.gradientStart, AppTheme.gradientEnd],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.gradientEnd.withValues(alpha: 0.4),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+          child: Icon(
+            playing ? Icons.pause : Icons.play_arrow,
+            key: ValueKey(playing),
+            size: 40,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}

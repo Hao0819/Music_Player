@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../data/hive/models/folder_model.dart';
 import '../../../widgets/empty_state.dart';
 import '../../favorites_history/providers/history_providers.dart';
@@ -36,24 +37,39 @@ class FoldersScreen extends ConsumerWidget {
         ],
       ),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
           const _NewAudioTile(),
+          const _SectionLabel('Auto collections'),
           const _HistoryTile(view: HistoryView.recentlyPlayed),
           const _HistoryTile(view: HistoryView.mostPlayed),
           for (final folder in systemFolders) _FolderListTile(folder: folder),
+          const _SectionLabel('Your folders'),
           if (userFolders.isEmpty)
             const Padding(
-              padding: EdgeInsets.only(top: 80),
+              padding: EdgeInsets.only(top: 40),
               child: EmptyState(
                 icon: Icons.folder_outlined,
                 title: 'No folders yet',
                 message: 'Tap the folder+ icon to create one — folders organize tracks without touching the files.',
               ),
             )
-          else ...[
-            const Divider(height: 1),
-            for (final folder in userFolders) _FolderListTile(folder: folder),
-          ],
+          else
+            // A grid of coloured cards rather than another run of identical
+            // rows, so your own folders are the part that stands out.
+            GridView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.35,
+              ),
+              itemCount: userFolders.length,
+              itemBuilder: (context, index) => _FolderCard(folder: userFolders[index]),
+            ),
         ],
       ),
     );
@@ -107,9 +123,10 @@ class _HistoryTile extends ConsumerWidget {
     final count = ref.watch(historyTracksProvider(view)).length;
 
     return ListTile(
-      leading: Icon(switch (view) {
-        HistoryView.recentlyPlayed => Icons.history,
-        HistoryView.mostPlayed => Icons.trending_up,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: _RoundIcon(switch (view) {
+        HistoryView.recentlyPlayed => Icons.history_rounded,
+        HistoryView.mostPlayed => Icons.trending_up_rounded,
       }),
       title: Text(switch (view) {
         HistoryView.recentlyPlayed => 'Recently played',
@@ -134,13 +151,14 @@ class _FolderListTile extends ConsumerWidget {
     final count = tracksAsync.value?.length;
 
     return ListTile(
-      leading: Icon(folder.isSystem ? Icons.favorite : Icons.folder),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: _RoundIcon(folder.isSystem ? Icons.favorite_rounded : Icons.folder_rounded),
       title: Text(folder.name),
       subtitle: count == null ? null : Text('$count track${count == 1 ? '' : 's'}'),
       trailing: folder.isSystem
           ? null
           : PopupMenuButton<String>(
-              onSelected: (action) => _handleAction(context, ref, action),
+              onSelected: (action) => handleFolderAction(context, ref, folder, action),
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'rename', child: Text('Rename')),
                 PopupMenuItem(value: 'delete', child: Text('Delete')),
@@ -151,29 +169,166 @@ class _FolderListTile extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Future<void> _handleAction(BuildContext context, WidgetRef ref, String action) async {
-    if (action == 'rename') {
-      final name = await promptForFolderName(context, initialValue: folder.name, title: 'Rename folder');
-      if (name != null && name.trim().isNotEmpty) {
-        await ref.read(folderActionsProvider).renameFolder(folder.id, name);
-      }
-      return;
-    }
+/// Square tinted container behind a leading icon — the same shape as the
+/// folder cards below, so the two halves of the screen match.
+class _RoundIcon extends StatelessWidget {
+  const _RoundIcon(this.icon);
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete folder?'),
-        content: Text('This only removes "${folder.name}" — your audio files are not affected.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-        ],
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        color: scheme.primaryContainer.withValues(alpha: 0.7),
+      ),
+      child: Icon(icon, color: scheme.onPrimaryContainer, size: 22),
+    );
+  }
+}
+
+/// A section heading between the pinned auto-collections and the user's own
+/// folders, so the two groups don't read as one long undifferentiated list.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      child: Text(
+        text.toUpperCase(),
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          letterSpacing: 1.2,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
-    if (confirmed == true) {
-      await ref.read(folderActionsProvider).deleteFolder(folder.id);
+  }
+}
+
+/// A gradient card for a user folder. Each folder keeps its own colour from
+/// [AppTheme.gradientFor], which is what makes the grid readable at a glance.
+class _FolderCard extends ConsumerWidget {
+  const _FolderCard({required this.folder});
+
+  final FolderModel folder;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final count = ref.watch(folderTracksProvider(folder.id)).value?.length;
+    final colors = AppTheme.gradientFor(folder.name);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.first.withValues(alpha: 0.32),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => FolderDetailScreen(folderId: folder.id)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 4, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.folder_rounded, color: Colors.white, size: 26),
+                    const Spacer(),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
+                      onSelected: (action) => handleFolderAction(context, ref, folder, action),
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'rename', child: Text('Rename')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Text(
+                    folder.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  count == null ? '—' : '$count track${count == 1 ? '' : 's'}',
+                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shared by the system-folder rows and the folder cards, so rename/delete
+/// behave identically in both places.
+Future<void> handleFolderAction(
+  BuildContext context,
+  WidgetRef ref,
+  FolderModel folder,
+  String action,
+) async {
+  if (action == 'rename') {
+    final name = await promptForFolderName(context, initialValue: folder.name, title: 'Rename folder');
+    if (name != null && name.trim().isNotEmpty) {
+      await ref.read(folderActionsProvider).renameFolder(folder.id, name);
     }
+    return;
+  }
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete folder?'),
+      content: Text('This only removes "${folder.name}" — your audio files are not affected.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+      ],
+    ),
+  );
+  if (confirmed == true) {
+    await ref.read(folderActionsProvider).deleteFolder(folder.id);
   }
 }

@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'core/theme/app_theme.dart';
 import 'features/folders/screens/folders_screen.dart';
 import 'features/library/screens/library_screen.dart';
+import 'features/player/providers/playback_session_provider.dart';
 import 'features/player/widgets/mini_player.dart';
 import 'features/search/screens/search_screen.dart';
 import 'features/settings/providers/theme_mode_provider.dart';
@@ -58,6 +59,9 @@ class _RootShellState extends ConsumerState<_RootShell> {
         if (!status.isGranted) {
           return const PermissionGateScreen();
         }
+        // Brings back last time's song, paused, and keeps saving it.
+        ref.watch(playbackSessionProvider);
+
         return Scaffold(
           body: IndexedStack(index: _index, children: _screens),
           bottomNavigationBar: Column(

@@ -73,6 +73,8 @@ class SearchScreen extends ConsumerWidget {
                     return TrackTile(
                       track: track,
                       isFavorite: ref.watch(isFavoriteProvider(track.path)),
+                      folderNames: ref.watch(folderNamesByPathProvider)[track.path] ?? const [],
+                      isCurrent: track.path == ref.watch(currentMediaItemProvider).value?.id,
                       onFavoriteToggle: () => folderActions.toggleFavorite(track.path),
                       onTap: () => ref
                           .read(playerControllerProvider)

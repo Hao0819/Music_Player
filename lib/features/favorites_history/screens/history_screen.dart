@@ -94,6 +94,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                   selectionMode: inSelectionMode,
                   selected: selection.contains(track.path),
                   isFavorite: ref.watch(isFavoriteProvider(track.path)),
+                  isCurrent: track.path == ref.watch(currentMediaItemProvider).value?.id,
                   onFavoriteToggle: () => folderActions.toggleFavorite(track.path),
                   onLongPress: () => selectionNotifier.toggle(track.path),
                   onTap: inSelectionMode

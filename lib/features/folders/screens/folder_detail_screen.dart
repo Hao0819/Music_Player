@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/selection_notifier.dart';
 import '../../../core/text_query_notifier.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/duration_format.dart';
 import '../../../core/utils/fuzzy_match.dart';
 import '../../../domain/folder_sort_mode.dart';
 import '../../../domain/track.dart';
@@ -166,25 +168,36 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
           // Dragging is only meaningful when the full list is shown in its
           // stored custom order — not while filtered by search or selecting.
           final canReorder = sortMode == FolderSortMode.manual && !inSelectionMode && !isSearching;
-          if (canReorder) {
-            return _ReorderableTrackList(folderId: folderId, tracks: tracks);
-          }
+          final currentPath = ref.watch(currentMediaItemProvider).value?.id;
 
-          return ListView.builder(
-            itemCount: tracks.length,
-            itemBuilder: (context, index) {
-              final track = tracks[index];
-              return TrackTile(
-                key: ValueKey(track.path),
-                track: track,
-                selectionMode: inSelectionMode,
-                selected: selection.contains(track.path),
-                onLongPress: () => ref.read(_folderDetailSelectionProvider.notifier).toggle(track.path),
-                onTap: inSelectionMode
-                    ? () => ref.read(_folderDetailSelectionProvider.notifier).toggle(track.path)
-                    : () => ref.read(playerControllerProvider).playTracks(tracks, initialIndex: index),
-              );
-            },
+          return Column(
+            children: [
+              if (!inSelectionMode) _FolderPlayHeader(tracks: tracks, folderName: folder.name),
+              Expanded(
+                child: canReorder
+                    ? _ReorderableTrackList(folderId: folderId, tracks: tracks, currentPath: currentPath)
+                    : ListView.builder(
+                        itemCount: tracks.length,
+                        itemBuilder: (context, index) {
+                          final track = tracks[index];
+                          return TrackTile(
+                            key: ValueKey(track.path),
+                            track: track,
+                            selectionMode: inSelectionMode,
+                            selected: selection.contains(track.path),
+                            isCurrent: track.path == currentPath,
+                            onLongPress: () =>
+                                ref.read(_folderDetailSelectionProvider.notifier).toggle(track.path),
+                            onTap: inSelectionMode
+                                ? () => ref.read(_folderDetailSelectionProvider.notifier).toggle(track.path)
+                                : () => ref
+                                    .read(playerControllerProvider)
+                                    .playTracks(tracks, initialIndex: index),
+                          );
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),
@@ -230,11 +243,101 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
   }
 }
 
+/// Gives a folder an identity at the top of the screen — cover tile, name,
+/// how much music is in it — plus Play / Shuffle, so listening to one doesn't
+/// require first hunting for a track to tap.
+class _FolderPlayHeader extends ConsumerWidget {
+  const _FolderPlayHeader({required this.tracks, required this.folderName});
+
+  final List<Track> tracks;
+  final String folderName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final controller = ref.read(playerControllerProvider);
+    final gradient = AppTheme.gradientFor(folderName);
+    final total = tracks.fold(Duration.zero, (sum, track) => sum + track.duration);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                  gradient: LinearGradient(
+                    colors: gradient,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: gradient.last.withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.folder_rounded, color: Colors.white, size: 42),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      folderName,
+                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'} · ${formatDuration(total)}',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Play'),
+                  onPressed: () => controller.playTracks(tracks),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  icon: const Icon(Icons.shuffle),
+                  label: const Text('Shuffle'),
+                  onPressed: () => controller.shufflePlay(tracks),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ReorderableTrackList extends ConsumerStatefulWidget {
-  const _ReorderableTrackList({required this.folderId, required this.tracks});
+  const _ReorderableTrackList({required this.folderId, required this.tracks, this.currentPath});
 
   final String folderId;
   final List<Track> tracks;
+  final String? currentPath;
 
   @override
   ConsumerState<_ReorderableTrackList> createState() => _ReorderableTrackListState();
@@ -277,6 +380,7 @@ class _ReorderableTrackListState extends ConsumerState<_ReorderableTrackList> {
         return TrackTile(
           key: ValueKey(track.path),
           track: track,
+          isCurrent: track.path == widget.currentPath,
           onLongPress: () => ref.read(_folderDetailSelectionProvider.notifier).toggle(track.path),
           onTap: () => ref.read(playerControllerProvider).playTracks(_tracks, initialIndex: index),
           trailing: ReorderableDragStartListener(

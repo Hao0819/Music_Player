@@ -36,6 +36,14 @@ final folderByIdProvider = Provider.family<FolderModel?, String>((ref, id) {
   return null;
 });
 
+/// Which user folders each track has been filed into, for labelling rows.
+final folderNamesByPathProvider = Provider<Map<String, List<String>>>((ref) {
+  ref.watch(folderLinksTickProvider);
+  // Renames only invalidate the folder list, so watch that too.
+  ref.watch(folderListProvider);
+  return ref.watch(folderRepositoryProvider).folderNamesByPath();
+});
+
 final isFavoriteProvider = Provider.family<bool, String>((ref, trackPath) {
   ref.watch(folderLinksTickProvider);
   return ref.watch(folderRepositoryProvider).isFavorite(trackPath);

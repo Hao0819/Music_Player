@@ -15,6 +15,10 @@ class HiveBoxes {
   static const knownTracks = 'known_tracks';
   static const playHistory = 'play_history';
   static const settings = 'settings';
+
+  /// Untyped key/value box for the last playback session. Kept apart from
+  /// [settings] so the frequent position saves don't rewrite everything else.
+  static const playbackSession = 'playback_session';
 }
 
 Future<void> initHive() async {
@@ -33,6 +37,7 @@ Future<void> initHive() async {
   await _openBox<KnownTrackRecord>(HiveBoxes.knownTracks);
   await _openBox<PlayHistoryEntry>(HiveBoxes.playHistory);
   await _openBox<AppSettingsModel>(HiveBoxes.settings);
+  await _openBox<dynamic>(HiveBoxes.playbackSession);
 }
 
 /// Opens a box, and if its file is corrupt or was written by an incompatible

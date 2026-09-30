@@ -136,6 +136,25 @@ class FolderRepository {
     return _links.values.where((link) => link.folderId != favoritesFolderId).map((link) => link.trackPath).toSet();
   }
 
+  /// For every track in at least one user folder, the names of those folders,
+  /// alphabetically. Favorites is left out — the heart already shows that.
+  Map<String, List<String>> folderNamesByPath() {
+    final namesById = {
+      for (final folder in _folders.values)
+        if (!folder.isSystem) folder.id: folder.name,
+    };
+
+    final result = <String, List<String>>{};
+    for (final link in _links.values) {
+      final name = namesById[link.folderId];
+      if (name != null) (result[link.trackPath] ??= []).add(name);
+    }
+    for (final names in result.values) {
+      names.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    }
+    return result;
+  }
+
   /// How many folder links point at any of [paths].
   int countLinksFor(Set<String> paths) =>
       _links.values.where((link) => paths.contains(link.trackPath)).length;
