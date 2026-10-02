@@ -72,7 +72,7 @@ class SettingsScreen extends ConsumerWidget {
           _SectionHeader(title: 'Download'),
           ListTile(
             leading: const Icon(Icons.download_outlined),
-            title: const Text('Download audio from a link'),
+            title: const Text('Download audio'),
             subtitle: const Text('Saves to Music/MusicPlayer and adds it to your library'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(

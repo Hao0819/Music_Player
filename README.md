@@ -87,8 +87,8 @@ rather than created by hand:
 - Your existing library on first install is the baseline, not "new"
 
 ### Downloading
-- **Search by name** in **Settings → Download audio from a link**, then tap a
-  result to download it. No copying links, no browser
+- **Search by name** in **Settings → Download audio**, then tap a result to
+  download it. No copying links, no browser
 - **Or paste a link** into the same box — one field, not two: text that parses
   as an http(s) URL is downloaded, anything else is searched. So when search
   doesn't surface what you want, a link copied from YouTube still works
@@ -124,7 +124,7 @@ rather than created by hand:
 - **Clean up missing files** — removes folder links and history entries left
   behind by audio that is no longer on the device, telling you exactly how many
   of each will go. Never touches files or your other folders
-- **Download audio from a link** — see [Downloading](#downloading)
+- **Download audio** — see [Downloading](#downloading)
 - App version and a note that your library stays on the device
 
 ---
