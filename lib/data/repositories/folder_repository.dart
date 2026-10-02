@@ -41,16 +41,32 @@ class FolderRepository {
 
   FolderModel? getFolder(String id) => _folders.get(id);
 
-  Future<FolderModel> createFolder(String name) async {
-    final folder = FolderModel(id: _uuid.v4(), name: name.trim(), createdAt: DateTime.now());
+  Future<FolderModel> createFolder(String name, {int? colorValue}) async {
+    final folder = FolderModel(
+      id: _uuid.v4(),
+      name: name.trim(),
+      createdAt: DateTime.now(),
+      colorValue: colorValue,
+    );
     await _folders.put(folder.id, folder);
     return folder;
   }
 
-  Future<void> renameFolder(String id, String newName) async {
+  /// Renames a folder and optionally recolours it.
+  ///
+  /// [colorValue] is only applied when [setColor] is true, because null is a
+  /// meaningful value here — it means "go back to the colour picked from the
+  /// name" — and so cannot double as "leave this alone".
+  Future<void> editFolder(
+    String id,
+    String newName, {
+    int? colorValue,
+    bool setColor = false,
+  }) async {
     final folder = _folders.get(id);
     if (folder == null || folder.isSystem) return;
     folder.name = newName.trim();
+    if (setColor) folder.colorValue = colorValue;
     await folder.save();
   }
 

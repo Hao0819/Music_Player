@@ -86,14 +86,14 @@ class FolderActions {
 
   FolderRepository get _repository => _ref.read(folderRepositoryProvider);
 
-  Future<FolderModel> createFolder(String name) async {
-    final folder = await _repository.createFolder(name);
+  Future<FolderModel> createFolder(String name, {int? colorValue}) async {
+    final folder = await _repository.createFolder(name, colorValue: colorValue);
     _ref.invalidate(folderListProvider);
     return folder;
   }
 
-  Future<void> renameFolder(String id, String name) async {
-    await _repository.renameFolder(id, name);
+  Future<void> editFolder(String id, String name, {int? colorValue, bool setColor = false}) async {
+    await _repository.editFolder(id, name, colorValue: colorValue, setColor: setColor);
     _ref.invalidate(folderListProvider);
   }
 

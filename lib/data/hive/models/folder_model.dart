@@ -19,11 +19,21 @@ class FolderModel extends HiveObject {
   @HiveField(4)
   String sortMode;
 
+  /// The folder's colour as an ARGB value, or null to fall back to one picked
+  /// from the name.
+  ///
+  /// A single base colour rather than the two ends of a gradient: the second
+  /// stop is derived from it, so there is one thing to store, one thing to
+  /// pick, and the derivation already guarantees a legible glyph on top.
+  @HiveField(5)
+  int? colorValue;
+
   FolderModel({
     required this.id,
     required this.name,
     required this.createdAt,
     this.isSystem = false,
     this.sortMode = 'manual',
+    this.colorValue,
   });
 }

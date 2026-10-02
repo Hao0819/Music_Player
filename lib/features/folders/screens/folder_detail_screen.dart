@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/selection_notifier.dart';
+import '../../../data/hive/models/folder_model.dart';
 import '../../../core/text_query_notifier.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/duration_format.dart';
@@ -133,7 +134,7 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
                   PopupMenuButton<String>(
                     onSelected: (action) => _handleMenuAction(context, action),
                     itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'rename', child: Text('Rename')),
+                      PopupMenuItem(value: 'edit', child: Text('Rename or recolour')),
                       PopupMenuItem(value: 'delete', child: Text('Delete')),
                     ],
                   ),
@@ -172,7 +173,7 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
 
           return Column(
             children: [
-              if (!inSelectionMode) _FolderPlayHeader(tracks: tracks, folderName: folder.name),
+              if (!inSelectionMode) _FolderPlayHeader(tracks: tracks, folder: folder),
               Expanded(
                 child: canReorder
                     ? _ReorderableTrackList(folderId: folderId, tracks: tracks, currentPath: currentPath)
@@ -217,10 +218,20 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
     final folder = ref.read(folderByIdProvider(folderId));
     if (folder == null) return;
 
-    if (action == 'rename') {
-      final name = await promptForFolderName(context, initialValue: folder.name, title: 'Rename folder');
-      if (name != null && name.trim().isNotEmpty) {
-        await ref.read(folderActionsProvider).renameFolder(folderId, name);
+    if (action == 'edit') {
+      final result = await promptForFolder(
+        context,
+        initialName: folder.name,
+        initialColor: folder.colorValue,
+        title: 'Edit folder',
+      );
+      if (result != null) {
+        await ref.read(folderActionsProvider).editFolder(
+              folderId,
+              result.name,
+              colorValue: result.colorValue,
+              setColor: true,
+            );
       }
       return;
     }
@@ -247,16 +258,16 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
 /// how much music is in it — plus Play / Shuffle, so listening to one doesn't
 /// require first hunting for a track to tap.
 class _FolderPlayHeader extends ConsumerWidget {
-  const _FolderPlayHeader({required this.tracks, required this.folderName});
+  const _FolderPlayHeader({required this.tracks, required this.folder});
 
   final List<Track> tracks;
-  final String folderName;
+  final FolderModel folder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final controller = ref.read(playerControllerProvider);
-    final gradient = AppTheme.gradientFor(folderName);
+    final base = AppTheme.folderColor(folder.name, folder.colorValue);
     final total = tracks.fold(Duration.zero, (sum, track) => sum + track.duration);
 
     return Padding(
@@ -270,20 +281,16 @@ class _FolderPlayHeader extends ConsumerWidget {
                 height: 96,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                  gradient: LinearGradient(
-                    colors: gradient,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: AppTheme.accentGradient(base),
                   boxShadow: [
                     BoxShadow(
-                      color: gradient.last.withValues(alpha: 0.35),
+                      color: base.withValues(alpha: 0.35),
                       blurRadius: 18,
                       offset: const Offset(0, 8),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.folder_rounded, color: Colors.white, size: 42),
+                child: Icon(Icons.folder_rounded, color: AppTheme.onAccent(base), size: 42),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -291,7 +298,7 @@ class _FolderPlayHeader extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      folderName,
+                      folder.name,
                       style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

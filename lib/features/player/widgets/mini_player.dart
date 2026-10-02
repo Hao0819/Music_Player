@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../widgets/artwork_image.dart';
 import '../../library/providers/library_providers.dart';
+import '../providers/artwork_theme_provider.dart';
 import '../providers/player_providers.dart';
 import '../screens/now_playing_screen.dart';
+import 'artwork_theme.dart';
 
 /// Rounded card floating above the bottom navigation. Renders nothing until
 /// something is actually playing.
@@ -24,13 +26,29 @@ class MiniPlayer extends ConsumerWidget {
     final item = ref.watch(currentMediaItemProvider).value;
     if (item == null) return const SizedBox.shrink();
 
-    final bar = _buildBar(context, ref, item);
+    // Scoped to this bar's own route, so the four screens that show a mini
+    // player never share a tag — see nowPlayingRoute for why that matters.
+    // The route object is the identity; records compare field-wise and Route
+    // does not override ==, so this is unique per route instance.
+    final heroTag = ('mini-player-artwork', ModalRoute.of(context));
+
+    // Only the bar is re-themed, not the screen behind it: a library list
+    // that changed colour on every track change would be unreadable.
+    final bar = ArtworkTheme(child: _Bar(item: item, heroTag: heroTag));
     // The card floats, so nothing is painted behind the gesture area — only
     // the inset needs to grow when the bar is the bottom-most thing.
     return isBottomMost ? SafeArea(top: false, child: bar) : bar;
   }
+}
 
-  Widget _buildBar(BuildContext context, WidgetRef ref, MediaItem item) {
+class _Bar extends ConsumerWidget {
+  const _Bar({required this.item, required this.heroTag});
+
+  final MediaItem item;
+  final Object heroTag;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(playbackStateProvider).value;
     final playing = state?.playing ?? false;
     final position = ref.watch(playbackPositionProvider).value ?? Duration.zero;
@@ -41,6 +59,7 @@ class MiniPlayer extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final controller = ref.read(playerControllerProvider);
+    final accent = ref.watch(currentAccentSeedProvider) ?? AppTheme.signal;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -60,9 +79,7 @@ class MiniPlayer extends ConsumerWidget {
           type: MaterialType.transparency,
           child: InkWell(
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const NowPlayingScreen()),
-            ),
+            onTap: () => Navigator.of(context).push(nowPlayingRoute(heroTag: heroTag)),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -70,7 +87,10 @@ class MiniPlayer extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(8, 8, 12, 6),
                   child: Row(
                     children: [
-                      _MiniArtwork(mediaItemId: item.id),
+                      Hero(
+                        tag: heroTag,
+                        child: _MiniArtwork(mediaItemId: item.id),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -87,14 +107,18 @@ class MiniPlayer extends ConsumerWidget {
                               item.artist ?? '',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                              style: theme.textTheme.bodySmall,
                             ),
                           ],
                         ),
                       ),
-                      _GradientPlayButton(playing: playing, onTap: controller.togglePlayPause),
+                      _GradientPlayButton(
+                        playing: playing,
+                        accent: accent,
+                        onTap: controller.togglePlayPause,
+                      ),
                       IconButton(
+                        tooltip: 'Next',
                         icon: const Icon(Icons.skip_next_rounded),
                         onPressed: controller.next,
                       ),
@@ -124,23 +148,25 @@ class MiniPlayer extends ConsumerWidget {
 }
 
 /// The mini player's only bright element, matching the big button on the
-/// Now Playing screen so the two read as the same control.
+/// Now Playing screen so the two read as the same control — including its
+/// colour, which both take from the playing track's artwork.
 class _GradientPlayButton extends StatelessWidget {
-  const _GradientPlayButton({required this.playing, required this.onTap});
+  const _GradientPlayButton({
+    required this.playing,
+    required this.accent,
+    required this.onTap,
+  });
 
   final bool playing;
+  final Color accent;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [AppTheme.gradientStart, AppTheme.gradientEnd],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppTheme.accentGradient(accent),
       ),
       child: Material(
         type: MaterialType.transparency,
@@ -152,7 +178,7 @@ class _GradientPlayButton extends StatelessWidget {
             height: 40,
             child: Icon(
               playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              color: Colors.white,
+              color: AppTheme.onAccent(accent),
               size: 24,
             ),
           ),

@@ -29,9 +29,11 @@ class FoldersScreen extends ConsumerWidget {
             tooltip: 'New folder',
             icon: const Icon(Icons.create_new_folder_outlined),
             onPressed: () async {
-              final name = await promptForFolderName(context);
-              if (name == null || name.trim().isEmpty) return;
-              await ref.read(folderActionsProvider).createFolder(name);
+              final result = await promptForFolder(context);
+              if (result == null) return;
+              await ref
+                  .read(folderActionsProvider)
+                  .createFolder(result.name, colorValue: result.colorValue);
             },
           ),
         ],
@@ -160,7 +162,7 @@ class _FolderListTile extends ConsumerWidget {
           : PopupMenuButton<String>(
               onSelected: (action) => handleFolderAction(context, ref, folder, action),
               itemBuilder: (context) => const [
-                PopupMenuItem(value: 'rename', child: Text('Rename')),
+                PopupMenuItem(value: 'edit', child: Text('Rename or recolour')),
                 PopupMenuItem(value: 'delete', child: Text('Delete')),
               ],
             ),
@@ -208,12 +210,8 @@ class _SectionLabel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
       child: Text(
-        text.toUpperCase(),
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-          letterSpacing: 1.2,
-          fontWeight: FontWeight.w700,
-        ),
+        text,
+        style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
       ),
     );
   }
@@ -230,19 +228,16 @@ class _FolderCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final count = ref.watch(folderTracksProvider(folder.id)).value?.length;
-    final colors = AppTheme.gradientFor(folder.name);
+    final base = AppTheme.folderColor(folder.name, folder.colorValue);
+    final onBase = AppTheme.onAccent(base);
 
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppTheme.accentGradient(base),
         boxShadow: [
           BoxShadow(
-            color: colors.first.withValues(alpha: 0.32),
+            color: base.withValues(alpha: 0.32),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -262,13 +257,13 @@ class _FolderCard extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.folder_rounded, color: Colors.white, size: 26),
+                    Icon(Icons.folder_rounded, color: onBase, size: 26),
                     const Spacer(),
                     PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
+                      icon: Icon(Icons.more_vert, color: onBase.withValues(alpha: 0.75), size: 20),
                       onSelected: (action) => handleFolderAction(context, ref, folder, action),
                       itemBuilder: (context) => const [
-                        PopupMenuItem(value: 'rename', child: Text('Rename')),
+                        PopupMenuItem(value: 'edit', child: Text('Rename or recolour')),
                         PopupMenuItem(value: 'delete', child: Text('Delete')),
                       ],
                     ),
@@ -282,7 +277,7 @@ class _FolderCard extends ConsumerWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
+                      color: onBase,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -290,7 +285,9 @@ class _FolderCard extends ConsumerWidget {
                 const SizedBox(height: 2),
                 Text(
                   count == null ? '—' : '$count track${count == 1 ? '' : 's'}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: onBase.withValues(alpha: 0.75),
+                  ),
                 ),
               ],
             ),
@@ -309,10 +306,20 @@ Future<void> handleFolderAction(
   FolderModel folder,
   String action,
 ) async {
-  if (action == 'rename') {
-    final name = await promptForFolderName(context, initialValue: folder.name, title: 'Rename folder');
-    if (name != null && name.trim().isNotEmpty) {
-      await ref.read(folderActionsProvider).renameFolder(folder.id, name);
+  if (action == 'edit') {
+    final result = await promptForFolder(
+      context,
+      initialName: folder.name,
+      initialColor: folder.colorValue,
+      title: 'Edit folder',
+    );
+    if (result != null) {
+      await ref.read(folderActionsProvider).editFolder(
+            folder.id,
+            result.name,
+            colorValue: result.colorValue,
+            setColor: true,
+          );
     }
     return;
   }

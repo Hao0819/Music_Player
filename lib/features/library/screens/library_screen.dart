@@ -299,7 +299,10 @@ class _LibraryHeader extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        color: scheme.primaryContainer.withValues(alpha: 0.5),
+        // Neutral, not primaryContainer: a saturated panel here put a second
+        // large block of colour directly behind the Shuffle pill, and the
+        // pill is meant to be the one bright thing on this screen.
+        color: scheme.surfaceContainerHigh,
       ),
       child: Row(
         children: [
@@ -319,13 +322,14 @@ class _LibraryHeader extends ConsumerWidget {
             ),
           ),
           // Gradient pill: the one bright element on the library screen, and
-          // the fastest way into playback from a long list.
+          // the fastest way into playback from a long list. Deliberately the
+          // app's own accent rather than the playing track's — the library is
+          // not re-themed per track, or a long list would change colour under
+          // you every few minutes.
           DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-              gradient: const LinearGradient(
-                colors: [AppTheme.gradientStart, AppTheme.gradientEnd],
-              ),
+              gradient: AppTheme.accentGradient(AppTheme.signal),
             ),
             child: Material(
               type: MaterialType.transparency,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/utils/duration_format.dart';
 import '../../../domain/track.dart';
 import '../../../widgets/artwork_image.dart';
+import '../../player/widgets/playing_indicator.dart';
 
 class TrackTile extends StatelessWidget {
   const TrackTile({
@@ -38,7 +39,8 @@ class TrackTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return ListTile(
       leading: selectionMode
@@ -53,9 +55,9 @@ class TrackTile extends StatelessWidget {
       title: Row(
         children: [
           if (isCurrent)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: Icon(Icons.graphic_eq, size: 16, color: scheme.primary),
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: PlayingIndicator(),
             ),
           Expanded(
             child: Text(
@@ -67,26 +69,46 @@ class TrackTile extends StatelessWidget {
           ),
         ],
       ),
-      subtitle: folderNames.isEmpty
-          ? Text('${track.artist} · ${track.album}', maxLines: 1, overflow: TextOverflow.ellipsis)
-          : Text.rich(
-              TextSpan(children: [
-                WidgetSpan(
-                  alignment: PlaceholderAlignment.middle,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 3),
-                    child: Icon(Icons.folder, size: 14, color: scheme.primary),
-                  ),
+      // Artist and album are separated by a real tonal step, not just a gap.
+      // Spacing alone was tried and does not survive contact with real data:
+      // these fields routinely contain spaces of their own ("HK Fans Club"),
+      // so without a contrast break the two run together into one phrase.
+      subtitle: Text.rich(
+        TextSpan(
+          children: [
+            if (folderNames.isNotEmpty) ...[
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 3),
+                  child: Icon(Icons.folder, size: 14, color: scheme.primary),
                 ),
-                TextSpan(
-                  text: folderNames.join(', '),
-                  style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
-                ),
-                TextSpan(text: ' · ${track.artist}'),
-              ]),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+              ),
+              TextSpan(
+                text: folderNames.join(', '),
+                style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
+              ),
+              _gap,
+              TextSpan(
+                text: track.artist,
+                style: TextStyle(color: scheme.onSurface.withValues(alpha: 0.80)),
+              ),
+            ] else ...[
+              TextSpan(
+                text: track.artist,
+                style: TextStyle(color: scheme.onSurface.withValues(alpha: 0.80)),
+              ),
+              _gap,
+              TextSpan(
+                text: track.album,
+                style: TextStyle(color: scheme.onSurfaceVariant.withValues(alpha: 0.62)),
+              ),
+            ],
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       trailing: trailing ??
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -94,11 +116,12 @@ class TrackTile extends StatelessWidget {
               if (onFavoriteToggle != null)
                 IconButton(
                   visualDensity: VisualDensity.compact,
-                  icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
+                  tooltip: isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
+                  icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, size: 20),
                   color: isFavorite ? scheme.primary : scheme.onSurfaceVariant,
                   onPressed: onFavoriteToggle,
                 ),
-              Text(formatDuration(track.duration)),
+              Text(formatDuration(track.duration), style: theme.textTheme.labelSmall),
             ],
           ),
       selected: selected,
@@ -107,3 +130,7 @@ class TrackTile extends StatelessWidget {
     );
   }
 }
+
+/// Wide enough to be unmistakably a field break rather than a word space,
+/// which matters because the fields on either side contain word spaces.
+const _gap = WidgetSpan(child: SizedBox(width: 13));
