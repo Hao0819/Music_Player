@@ -121,7 +121,7 @@ void main() {
       expect((got - want).abs(), lessThan(30), reason: 'primary drifted to $got from $want');
     });
 
-    test('falls back to the signal blue when a track has no artwork', () {
+    test('falls back to the app signal when a track has no artwork', () {
       final scheme = themeForAccent(null, Brightness.dark).colorScheme;
       final signalHue = HSLColor.fromColor(AppTheme.signal).hue;
       final got = HSLColor.fromColor(scheme.primary).hue;
@@ -192,6 +192,39 @@ void main() {
         isFalse,
         reason: 'the cache kept growing instead of evicting',
       );
+    });
+  });
+
+  group('chrome colours', () {
+    test('the secondary roles follow the seed hue', () {
+      // These were hand-written hex values once, so they kept the previous
+      // palette's hue when the seed changed and left selected chips and the
+      // navigation indicator looking like the old colour.
+      final seedHue = HSLColor.fromColor(AppTheme.signal).hue;
+
+      for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+        final scheme = theme.colorScheme;
+        for (final role in [
+          scheme.secondary,
+          scheme.secondaryContainer,
+          scheme.onSecondaryContainer,
+        ]) {
+          final hue = HSLColor.fromColor(role).hue;
+          final raw = (hue - seedHue).abs();
+          expect(raw > 180 ? 360 - raw : raw, lessThan(12), reason: '$role drifted off the seed');
+        }
+      }
+    });
+
+    test('selected chip text is readable on its container', () {
+      for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+        final scheme = theme.colorScheme;
+        expect(
+          _contrastRatio(scheme.onSecondaryContainer, scheme.secondaryContainer),
+          greaterThan(4.5),
+          reason: '${theme.brightness} chip label fails WCAG AA',
+        );
+      }
     });
   });
 

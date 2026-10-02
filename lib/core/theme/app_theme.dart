@@ -16,8 +16,9 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  /// Fallback accent, used until a track's artwork supplies one.
-  static const signal = Color(0xFF2F6BFF);
+  /// Fallback accent, used until a track's artwork supplies one, and the
+  /// colour the app's own chrome is built from.
+  static const signal = Color(0xFF32A4A8);
 
   /// The gradient for play buttons and pills, built from the sampled accent
   /// itself rather than from `scheme.primary`.
@@ -38,23 +39,32 @@ class AppTheme {
     final glyph = onAccent(base);
     final hsl = HSLColor.fromColor(base);
 
-    // A fixed +28° does not mean the same thing everywhere on the wheel. On
-    // blue (223→251) it is a clean step into indigo; on a gold like #D9A227 it
-    // lands at 69°, dragging the colour into olive — the folder card came out
-    // visibly muddier than the swatch that produced it. So the step turns back
-    // on itself rather than crossing that band, unless the base already sits
-    // inside it and there is nowhere better to go.
-    const step = 28.0;
+    // Small on purpose. A wider step used to carry the accent into a
+    // neighbouring colour entirely — a teal seed came out of the far end
+    // looking blue — which reads as a different colour rather than as shading
+    // of the chosen one. At this width the hue only inflects; the chroma and
+    // lightness steps below carry the gradient.
+    //
+    // The step also turns back on itself rather than crossing the olive band,
+    // unless the base already sits inside it and there is nowhere better to
+    // go: on a gold like #D9A227 a forward step lands in chartreuse, and the
+    // folder card came out visibly muddier than the swatch that made it.
+    const step = 12.0;
     final forward = (hsl.hue + step) % 360;
     final hue = _inMustyBand(forward) && !_inMustyBand(hsl.hue)
         ? (hsl.hue - step + 360) % 360
         : forward;
 
+    // With the hue barely moving, depth is what makes this read as a gradient
+    // at all. It steps away from the glyph's own lightness rather than toward
+    // it, so the far end stays the legible one; `_ensureContrast` below is
+    // only the backstop for hues where that is not enough.
+    final awayFromGlyph = glyph.computeLuminance() > 0.5 ? -0.06 : 0.06;
+
     final far = hsl
         .withHue(hue)
-        // A lightness step alone barely reads at these mid tones; it is the
-        // chroma step that gives the gradient its edge.
         .withSaturation((hsl.saturation * 1.18).clamp(0.0, 1.0))
+        .withLightness((hsl.lightness + awayFromGlyph).clamp(0.0, 1.0))
         .toColor();
 
     return LinearGradient(
@@ -284,19 +294,27 @@ class AppTheme {
     final isDark = brightness == Brightness.dark;
 
     // "vibrant" keeps far more of the seed's chroma than the default tonal
-    // scheme, which is what makes the accents actually read as colourful.
-    // Even a blue seed leaves it with violet secondary tones, and those are
-    // exactly the surfaces that read as purple: selected chips, the
-    // navigation indicator, badges. Pin them back to the signal hue.
+    // scheme, which is what makes the accents actually read as colourful. It
+    // also drifts the secondary roles off the seed's hue, and those are
+    // exactly the surfaces you notice: selected chips, the navigation
+    // indicator, badges. So they are pinned back onto the seed.
+    //
+    // Derived rather than written out as hex. They used to be hand-picked
+    // blues, which meant they kept their old hue when the seed changed and
+    // left the chrome looking like the previous palette.
+    final seed = HSLColor.fromColor(signal);
+    Color tone(double lightness, double saturation) =>
+        seed.withLightness(lightness).withSaturation(saturation).toColor();
+
     final scheme = neutralize(
       ColorScheme.fromSeed(
         seedColor: signal,
         brightness: brightness,
         dynamicSchemeVariant: DynamicSchemeVariant.vibrant,
       ).copyWith(
-        secondary: isDark ? const Color(0xFF9DC0FF) : const Color(0xFF2B5CB8),
-        secondaryContainer: isDark ? const Color(0xFF17376B) : const Color(0xFFD7E3FF),
-        onSecondaryContainer: isDark ? const Color(0xFFD7E3FF) : const Color(0xFF0B2C63),
+        secondary: isDark ? tone(0.72, 0.60) : tone(0.32, 0.70),
+        secondaryContainer: isDark ? tone(0.20, 0.55) : tone(0.88, 0.55),
+        onSecondaryContainer: isDark ? tone(0.86, 0.50) : tone(0.16, 0.75),
       ),
     );
 
