@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/duration_format.dart';
+import '../../../services/download/ytdlp_service.dart';
 import '../providers/download_providers.dart';
 
 /// Pulls audio off a link with the embedded yt-dlp and files it into the
@@ -87,15 +88,30 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen> {
           children: [
             TextField(
               controller: _urlController,
-              keyboardType: TextInputType.url,
+              keyboardType: TextInputType.text,
               autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: 'Link',
-                hintText: 'Paste a video or track link',
-                prefixIcon: Icon(Icons.link),
-                border: OutlineInputBorder(),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                labelText: 'Search or paste a link',
+                hintText: 'Song name, or a link you copied',
+                prefixIcon: Icon(_isLink ? Icons.link : Icons.search),
+                border: const OutlineInputBorder(),
+                suffixIcon: _urlController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear',
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _urlController.clear();
+                          ref.read(ytdlpSearchProvider.notifier).clear();
+                          setState(() {});
+                        },
+                      ),
               ),
-              onSubmitted: (_) => _start(),
+              // Typing is what flips the button between Search and Download,
+              // so the field has to rebuild as it changes.
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: 12),
             SegmentedButton<String>(
@@ -109,12 +125,13 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen> {
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: _start,
-              icon: const Icon(Icons.download),
-              label: const Text('Download audio'),
+              onPressed: _submit,
+              icon: Icon(_isLink ? Icons.download : Icons.search),
+              label: Text(_isLink ? 'Download audio' : 'Search'),
             ),
             const SizedBox(height: 8),
             const _VersionRow(),
+            _SearchResults(onDownload: _start),
             const Divider(height: 32),
             if (tasks.isEmpty)
               Padding(
@@ -159,11 +176,29 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen> {
     }
   }
 
-  Future<void> _start() async {
-    final error = await ref.read(downloadQueueProvider.notifier).start(
-          _urlController.text,
-          format: _format,
-        );
+  /// Anything that parses as an http(s) URL is treated as something to
+  /// download; everything else is search terms. Keeping both on one field
+  /// means a link you copied from YouTube still works when search comes up
+  /// short.
+  bool get _isLink {
+    final text = _urlController.text.trim();
+    if (text.isEmpty || text.contains(' ')) return false;
+    final uri = Uri.tryParse(text);
+    return uri != null && uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https');
+  }
+
+  Future<void> _submit() async {
+    if (_isLink) {
+      await _start(_urlController.text);
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    await ref.read(ytdlpSearchProvider.notifier).run(_urlController.text);
+  }
+
+  Future<void> _start(String url) async {
+    final error = await ref.read(downloadQueueProvider.notifier).start(url, format: _format);
     if (!mounted) return;
 
     if (error != null) {
@@ -171,7 +206,9 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen> {
       return;
     }
     _urlController.clear();
+    ref.read(ytdlpSearchProvider.notifier).clear();
     FocusScope.of(context).unfocus();
+    setState(() {});
   }
 }
 
@@ -316,6 +353,117 @@ class _DownloadTile extends ConsumerWidget {
 }
 
 enum _HistoryAction { toggleVisibility, clear }
+
+/// Results from the search box, each one tappable to download straight away.
+class _SearchResults extends ConsumerWidget {
+  const _SearchResults({required this.onDownload});
+
+  final Future<void> Function(String url) onDownload;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final results = ref.watch(ytdlpSearchProvider);
+    final theme = Theme.of(context);
+
+    return switch (results) {
+      AsyncLoading() => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 12),
+              // Searching scrapes rather than calling an API, so it is slower
+              // than a search box usually feels.
+              Text('Searching…'),
+            ],
+          ),
+        ),
+      AsyncError(:final error) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            children: [
+              Text(
+                'Search failed',
+                style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.error),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$error',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You can still paste a link from YouTube instead.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      AsyncData(:final value) when value.isEmpty => const SizedBox.shrink(),
+      AsyncData(:final value) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            Text('${value.length} results', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            for (final result in value)
+              _SearchResultTile(result: result, onDownload: () => onDownload(result.url)),
+          ],
+        ),
+    };
+  }
+}
+
+class _SearchResultTile extends StatelessWidget {
+  const _SearchResultTile({required this.result, required this.onDownload});
+
+  final YtdlpSearchResult result;
+  final VoidCallback onDownload;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 64,
+          height: 48,
+          child: result.thumbnail.isEmpty
+              ? ColoredBox(color: theme.colorScheme.surfaceContainerHighest)
+              : Image.network(
+                  result.thumbnail,
+                  fit: BoxFit.cover,
+                  // A dead thumbnail URL must not take the row with it.
+                  errorBuilder: (_, _, _) =>
+                      ColoredBox(color: theme.colorScheme.surfaceContainerHighest),
+                ),
+        ),
+      ),
+      title: Text(result.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        [
+          if (result.uploader.isNotEmpty) result.uploader,
+          if (result.duration > Duration.zero) formatDuration(result.duration),
+        ].join(' · '),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: IconButton(
+        tooltip: 'Download',
+        icon: const Icon(Icons.download),
+        onPressed: onDownload,
+      ),
+      onTap: onDownload,
+    );
+  }
+}
 
 /// Stands in for the collapsed history so it's obvious something is hidden
 /// rather than simply gone.

@@ -37,6 +37,26 @@ final ytdlpVersionProvider = FutureProvider<String?>((ref) async {
   return ref.watch(ytdlpServiceProvider).version();
 });
 
+/// Results for the download screen's search box. Starts empty rather than
+/// running a query on build, since there is nothing to search for yet.
+class YtdlpSearchNotifier extends AsyncNotifier<List<YtdlpSearchResult>> {
+  @override
+  Future<List<YtdlpSearchResult>> build() async => const [];
+
+  Future<void> run(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() => ref.read(ytdlpServiceProvider).search(trimmed));
+  }
+
+  void clear() => state = const AsyncValue.data([]);
+}
+
+final ytdlpSearchProvider =
+    AsyncNotifierProvider<YtdlpSearchNotifier, List<YtdlpSearchResult>>(YtdlpSearchNotifier.new);
+
 enum DownloadStatus { preparing, running, completed, failed, cancelled }
 
 class DownloadTask {

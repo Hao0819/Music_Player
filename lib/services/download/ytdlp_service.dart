@@ -36,6 +36,19 @@ class YtdlpService {
     return map == null ? null : YtdlpMediaInfo.fromMap(map);
   }
 
+  /// Searches through yt-dlp's own `ytsearch` prefix — no API key, no quota.
+  /// Takes a few seconds, since it is scraping rather than hitting an API.
+  Future<List<YtdlpSearchResult>> search(String query, {int limit = 20}) async {
+    final rows = await _call<List<Object?>>('search', {'query': query, 'limit': limit});
+    if (rows == null) return const [];
+
+    return rows
+        .whereType<Map<Object?, Object?>>()
+        .map(YtdlpSearchResult.fromMap)
+        .where((result) => result.url.isNotEmpty)
+        .toList();
+  }
+
   /// Starts a download and returns its id straight away; watch [events] for
   /// what happens next.
   Future<String?> startDownload(String url, {String format = 'mp3'}) {
@@ -86,6 +99,36 @@ class YtdlpMediaInfo {
   final String uploader;
   final Duration duration;
   final String thumbnail;
+}
+
+/// One hit from a `ytsearch` query.
+class YtdlpSearchResult {
+  const YtdlpSearchResult({
+    required this.id,
+    required this.title,
+    required this.uploader,
+    required this.duration,
+    required this.thumbnail,
+    required this.url,
+  });
+
+  factory YtdlpSearchResult.fromMap(Map<Object?, Object?> map) {
+    return YtdlpSearchResult(
+      id: map['id'] as String? ?? '',
+      title: map['title'] as String? ?? 'Untitled',
+      uploader: map['uploader'] as String? ?? '',
+      duration: Duration(seconds: (map['duration'] as num?)?.toInt() ?? 0),
+      thumbnail: map['thumbnail'] as String? ?? '',
+      url: map['url'] as String? ?? '',
+    );
+  }
+
+  final String id;
+  final String title;
+  final String uploader;
+  final Duration duration;
+  final String thumbnail;
+  final String url;
 }
 
 /// One message from a running download.

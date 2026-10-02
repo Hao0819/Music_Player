@@ -15,6 +15,7 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -69,6 +70,11 @@ class YtdlpBridge(private val context: Context, messenger: BinaryMessenger) {
                 "fetchInfo" -> {
                     val url = call.argument<String>("url").orEmpty()
                     worker.execute { fetchInfo(url, result) }
+                }
+                "search" -> {
+                    val query = call.argument<String>("query").orEmpty()
+                    val limit = call.argument<Int>("limit") ?: 20
+                    worker.execute { search(query, limit, result) }
                 }
                 "startDownload" -> {
                     val url = call.argument<String>("url").orEmpty()
@@ -181,6 +187,104 @@ class YtdlpBridge(private val context: Context, messenger: BinaryMessenger) {
         } catch (error: Throwable) {
             reply(result) { it.error("INFO_FAILED", error.message, null) }
         }
+    }
+
+    /**
+     * Searches with yt-dlp's own `ytsearch` prefix rather than the YouTube Data
+     * API — no API key to embed, no daily quota, and nothing beyond what the
+     * downloader already does.
+     *
+     * `--flat-playlist` skips resolving each hit's stream formats, which is the
+     * difference between a couple of seconds and most of a minute.
+     */
+    private fun search(query: String, limit: Int, result: MethodChannel.Result) {
+        if (query.isBlank()) {
+            reply(result) { it.error("BAD_QUERY", "No search terms given", null) }
+            return
+        }
+        if (!initializedOrFail(result)) return
+
+        try {
+            val request = YoutubeDLRequest("ytsearch$limit:$query").apply {
+                addOption("--flat-playlist")
+                addOption("--dump-json")
+                addOption("--no-warnings")
+                // One unavailable hit shouldn't lose the whole result set.
+                addOption("--ignore-errors")
+            }
+
+            val output = YoutubeDL.getInstance().execute(request).out
+            val rows = parseSearchOutput(output)
+            Log.i(TAG, "search(\"$query\") returned ${rows.size} result(s)")
+            reply(result) { it.success(rows) }
+        } catch (error: Throwable) {
+            Log.w(TAG, "search(\"$query\") failed", error)
+            reply(result) { it.error("SEARCH_FAILED", error.message ?: error.toString(), null) }
+        }
+    }
+
+    /**
+     * `--dump-json` writes one JSON object per line. Field names drift between
+     * yt-dlp releases, so every lookup here takes alternatives and a missing
+     * one costs that field rather than the row.
+     */
+    private fun parseSearchOutput(output: String): List<Map<String, Any?>> {
+        val rows = mutableListOf<Map<String, Any?>>()
+
+        for (line in output.lineSequence()) {
+            val trimmed = line.trim()
+            if (!trimmed.startsWith("{")) continue
+
+            val json = try {
+                JSONObject(trimmed)
+            } catch (error: Throwable) {
+                continue
+            }
+
+            val id = json.optString("id").takeIf { it.isNotBlank() } ?: continue
+            rows.add(
+                mapOf(
+                    "id" to id,
+                    "title" to json.stringOrNull("title").orEmpty(),
+                    "uploader" to (
+                        json.stringOrNull("channel")
+                            ?: json.stringOrNull("uploader")
+                            ?: json.stringOrNull("uploader_id")
+                            ?: ""
+                        ),
+                    "duration" to json.optDouble("duration", 0.0).toLong(),
+                    "thumbnail" to (json.stringOrNull("thumbnail") ?: json.firstThumbnail()),
+                    // A flat search entry's own url is already watchable; the
+                    // fallback covers releases that only report the id.
+                    "url" to (
+                        json.stringOrNull("url")
+                            ?: json.stringOrNull("webpage_url")
+                            ?: "https://www.youtube.com/watch?v=$id"
+                        ),
+                )
+            )
+        }
+
+        if (rows.isEmpty() && output.isNotBlank()) {
+            // Makes a field-name change diagnosable without another build.
+            Log.w(TAG, "search parsed 0 rows from: ${output.take(400)}")
+        }
+        return rows
+    }
+
+    private fun JSONObject.stringOrNull(key: String): String? {
+        if (!has(key) || isNull(key)) return null
+        return optString(key).takeIf { it.isNotBlank() && it != "null" }
+    }
+
+    /** Thumbnails come as an array ordered worst to best; the last is largest. */
+    private fun JSONObject.firstThumbnail(): String? {
+        val thumbnails = optJSONArray("thumbnails") ?: return null
+        for (index in thumbnails.length() - 1 downTo 0) {
+            val url = thumbnails.optJSONObject(index)?.stringOrNull("url")
+            if (url != null) return url
+        }
+        return null
     }
 
     // --- downloading -----------------------------------------------------
