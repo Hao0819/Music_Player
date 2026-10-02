@@ -42,30 +42,21 @@ class LibraryScreen extends ConsumerStatefulWidget {
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   final _scrollController = ScrollController();
   final _searchController = TextEditingController();
-  final _searchFocus = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    // Pinning while typing is driven by focus, so the bar has to rebuild when
-    // it changes.
-    _searchFocus.addListener(() => setState(() {}));
-  }
 
   @override
   void dispose() {
     _scrollController.dispose();
     _searchController.dispose();
-    _searchFocus.dispose();
     super.dispose();
   }
 
   /// Everything the list scrolls out from under before the first row.
   ///
-  /// The app bar's own scroll extent includes the status bar inset, because it
-  /// is the first sliver and draws behind it.
-  double get _headerExtent =>
-      MediaQuery.paddingOf(context).top + _toolbarExtent + _chipsExtent + _statsExtent;
+  /// The app bar is excluded even though it is above the list: pinned, it
+  /// keeps painting over the top of the viewport, so the distance the content
+  /// scrolls past it is exactly the height it then covers. Only the chips and
+  /// the count row actually scroll away.
+  double get _headerExtent => _chipsExtent + _statsExtent;
 
   void _jumpToLetter(String letter, List<Track> tracks) {
     if (!_scrollController.hasClients) return;
@@ -102,14 +93,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     // An A–Z index only means anything while the list is in alphabetical
     // order of something. It is also hidden while selecting, where the app bar
     // is pinned and so the offsets above would be off by its height.
-    // Also hidden while the search field has focus, where the bar is pinned
-    // and the offsets above would be off by its height.
     final showIndexBar = !inSelectionMode &&
-        !_searchFocus.hasFocus &&
         tracks.length > 20 &&
         (sortField == LibrarySortField.title ||
             sortField == LibrarySortField.artist ||
             sortField == LibrarySortField.album);
+
+    final indexBarInset = showIndexBar ? AlphabetIndexBar.hitWidth : 0.0;
 
     return Scaffold(
       body: Stack(
@@ -125,14 +115,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 _appBar(inSelectionMode, selection, filter, query),
+                // The rows above the list have to clear the index strip too —
+                // only the list itself was inset before, so the Shuffle pill
+                // ran underneath the letters.
                 if (!inSelectionMode)
-                  const SliverToBoxAdapter(
-                    child: SizedBox(height: _chipsExtent, child: _FolderStatusChips()),
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: _chipsExtent,
+                      child: Padding(
+                        padding: EdgeInsets.only(right: indexBarInset),
+                        child: const _FolderStatusChips(),
+                      ),
+                    ),
                   ),
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: _statsExtent,
-                    child: _LibraryStats(shown: tracks.length, isFiltered: isFiltered),
+                    child: Padding(
+                      padding: EdgeInsets.only(right: indexBarInset),
+                      child: _LibraryStats(shown: tracks.length, isFiltered: isFiltered),
+                    ),
                   ),
                 ),
                 ...tracksAsync.when(
@@ -158,7 +160,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                             ),
                           ),
                         ]
-                      : [_trackSliver(tracks, showIndexBar)],
+                      : [_trackSliver(tracks, indexBarInset)],
                 ),
               ],
             ),
@@ -212,14 +214,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
 
     return SliverAppBar(
-      // Scrolls away with the list and comes straight back on an upward
-      // flick, so the search field costs nothing while you are reading — but
-      // pins itself once you are typing in it, because the keyboard appearing
-      // scrolls the view to keep the focused field visible, and a bar that is
-      // free to move answers that by half-collapsing under the status bar.
-      floating: true,
-      snap: !_searchFocus.hasFocus,
-      pinned: _searchFocus.hasFocus,
+      // Pinned, not floating+snap. Snapping decides on finger-lift whether to
+      // finish opening or spring shut, so lifting off to tap the field you
+      // just revealed could take it away again — reaching for search is worth
+      // more than the 64dp. The chips and count row still scroll away.
+      pinned: true,
       toolbarHeight: _toolbarExtent,
       titleSpacing: 16,
       // No "Library" heading: the navigation bar already says which tab this
@@ -228,7 +227,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         height: 48,
         child: SearchBar(
           controller: _searchController,
-          focusNode: _searchFocus,
           hintText: 'Search your library',
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
           leading: const Icon(Icons.search, size: 20),
@@ -257,7 +255,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
   }
 
-  Widget _trackSliver(List<Track> tracks, bool showIndexBar) {
+  Widget _trackSliver(List<Track> tracks, double inset) {
     final selection = ref.watch(librarySelectionProvider);
     final selectionNotifier = ref.read(librarySelectionProvider.notifier);
     final folderActions = ref.read(folderActionsProvider);
@@ -265,7 +263,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final currentPath = ref.watch(currentMediaItemProvider).value?.id;
 
     return SliverPadding(
-      padding: EdgeInsets.only(right: showIndexBar ? AlphabetIndexBar.hitWidth : 0),
+      padding: EdgeInsets.only(right: inset),
       sliver: SliverFixedExtentList(
         itemExtent: _trackTileExtent,
         delegate: SliverChildBuilderDelegate(
