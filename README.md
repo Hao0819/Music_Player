@@ -87,9 +87,14 @@ rather than created by hand:
 - Your existing library on first install is the baseline, not "new"
 
 ### Downloading
-- Paste a link in **Settings → Download audio from a link** and get a tagged
-  audio file in `Music/MusicPlayer/`, indexed by MediaStore so it shows up in
-  your library like any other track
+- **Search by name** in **Settings → Download audio from a link**, then tap a
+  result to download it. No copying links, no browser
+- **Or paste a link** into the same box — one field, not two: text that parses
+  as an http(s) URL is downloaded, anything else is searched. So when search
+  doesn't surface what you want, a link copied from YouTube still works
+- Results show thumbnail, channel and duration
+- Downloads land in `Music/MusicPlayer/` as tagged audio, indexed by MediaStore
+  so they show up in your library like any other track
 - Choose **MP3 / M4A / Opus**; the video stream is never downloaded, only the
   best audio-only format
 - Live progress, ETA and per-download cancel
@@ -277,6 +282,20 @@ download completes.
 Progress arrives on an `EventChannel` keyed by a download id, because a
 `MethodChannel` reply can only fire once and a download reports for minutes.
 
+Search goes through yt-dlp's own `ytsearch` prefix rather than the **YouTube
+Data API**, for three reasons: the free API quota allows about 100 searches a
+day (a `search.list` call costs 100 of 10,000 daily units), an API key cannot
+be hidden inside a distributed APK, and the API's terms forbid using data
+obtained through it to download media — precisely the pairing this feature
+would create. Going through yt-dlp costs no key, no quota and no extra
+dependency, and `--flat-playlist` keeps a query to a few seconds by skipping
+per-result format resolution.
+
+`--dump-json` field names drift between yt-dlp releases, so `parseSearchOutput`
+takes alternatives for each one (`channel` → `uploader` → `uploader_id`,
+`thumbnail` → largest of `thumbnails`) and logs the raw output when a parse
+yields nothing, rather than failing silently.
+
 ### Project layout
 
 ```
@@ -460,7 +479,10 @@ Added since: app icon and splash screen, and the yt-dlp downloader
   continues. On a long track the transcode alone can run for a minute and look
   stalled.
 - Extraction **will break eventually** as sites change; use the in-app
-  **Update yt-dlp** button rather than waiting for an app release.
+  **Update yt-dlp** button rather than waiting for an app release. The same
+  applies to search, which runs through the same extractor.
+- **Search takes a few seconds.** It scrapes rather than calling an API, so it
+  will never feel as immediate as a search box usually does.
 - On MIUI (Xiaomi / Redmi / POCO) the media notification and background
   playback need **Autostart** enabled for the app in Security settings, and
   battery saver set to **No restrictions**. Without those, Android blocks the
