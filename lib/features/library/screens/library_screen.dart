@@ -58,16 +58,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// the count row actually scroll away.
   double get _headerExtent => _chipsExtent + _statsExtent;
 
-  void _jumpToLetter(String letter, List<Track> tracks) {
+  void _jumpToLetter(String letter, List<Track> tracks, LibrarySortField field) {
     if (!_scrollController.hasClients) return;
 
-    var index = tracks.indexWhere((track) => track.indexLetter == letter);
+    var index = tracks.indexWhere((track) => _letterOf(track, field) == letter);
     if (index < 0) {
       // Nothing under that letter — fall through to the next section that
       // does exist so the gesture still feels responsive.
       final target = AlphabetIndexBar.letters.indexOf(letter);
       for (var i = target + 1; i < AlphabetIndexBar.letters.length; i++) {
-        index = tracks.indexWhere((track) => track.indexLetter == AlphabetIndexBar.letters[i]);
+        final next = AlphabetIndexBar.letters[i];
+        index = tracks.indexWhere((track) => _letterOf(track, field) == next);
         if (index >= 0) break;
       }
     }
@@ -77,6 +78,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         .clamp(0.0, _scrollController.position.maxScrollExtent);
     _scrollController.jumpTo(offset);
   }
+
+  /// The index letter for whichever column the list is sorted on, so the
+  /// strip and the list agree.
+  static String _letterOf(Track track, LibrarySortField field) => switch (field) {
+        LibrarySortField.artist => track.artistIndexLetter,
+        LibrarySortField.album => track.albumIndexLetter,
+        _ => track.indexLetter,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -174,8 +183,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               bottom: 8,
               right: 0,
               child: AlphabetIndexBar(
-                availableLetters: {for (final track in tracks) track.indexLetter},
-                onLetterSelected: (letter) => _jumpToLetter(letter, tracks),
+                availableLetters: {for (final track in tracks) _letterOf(track, sortField)},
+                onLetterSelected: (letter) => _jumpToLetter(letter, tracks, sortField),
               ),
             ),
         ],
