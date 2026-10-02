@@ -1,4 +1,5 @@
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:pinyin/pinyin.dart';
 
 /// A single audio file. Built from whatever source found it — the
 /// `on_audio_query` plugin or our own broader MediaStore query — so the rest
@@ -59,37 +60,98 @@ class Track {
   final DateTime dateAdded;
   final String format;
 
-  /// Lower-cased copies used for sorting and searching.
+  /// Sort keys, with Han characters romanised.
   ///
-  /// Computed once per track instead of per comparison. Sorting a library of
-  /// a thousand runs on the order of ten thousand comparisons, and doing
-  /// `toLowerCase()` inside each one allocated two strings every time — on
-  /// every keystroke, because the sort reruns whenever the query changes.
-  late final String titleKey = title.toLowerCase();
-  late final String artistKey = artist.toLowerCase();
-  late final String albumKey = album.toLowerCase();
+  /// Sorting on the raw strings ordered Chinese by UTF-16 code point, which is
+  /// not an order anyone reads in, and left the A–Z index pointing at
+  /// positions that did not correspond to its letters. Non-Han text is passed
+  /// through unchanged, so Latin titles sort exactly as before.
+  ///
+  /// Computed once per track instead of per comparison: sorting a library of a
+  /// thousand runs on the order of ten thousand comparisons, and the whole
+  /// sort reruns whenever the query changes.
+  late final String titleKey = _sortKey(title);
+  late final String artistKey = _sortKey(artist);
+  late final String albumKey = _sortKey(album);
 
   /// Everything a text query is matched against, lower-cased and joined once.
   ///
-  /// This used to be rebuilt per track per keystroke, which is two string
-  /// allocations times the size of the library for every character typed.
+  /// Deliberately the original text, not the romanised form: typing Chinese
+  /// has to match Chinese. (Searching by pinyin would be a separate feature,
+  /// and would need this to hold both.)
   late final String searchHaystack = '$title $artist $album'.toLowerCase();
 
-  /// First letter used by the A–Z index, or '#' for anything non-alphabetic.
-  ///
-  /// Also cached: building the index bar asks every track for this, and the
-  /// old version compiled a fresh [RegExp] on each call.
-  late final String indexLetter = _computeIndexLetter();
+  /// First letter used by the A–Z index, per field, so the strip agrees with
+  /// whichever column the list is currently sorted on. It used to be derived
+  /// from the title whatever the sort was, which made every jump wrong while
+  /// sorted by artist or album.
+  late final String indexLetter = _indexLetterOf(title);
+  late final String artistIndexLetter = _indexLetterOf(artist);
+  late final String albumIndexLetter = _indexLetterOf(album);
 
   static final _letterPattern = RegExp('[A-Z]');
+  static final _digitPattern = RegExp('[0-9]');
+  static final _han = RegExp(r'[㐀-䶿一-鿿豈-﫿]');
 
-  String _computeIndexLetter() {
-    final trimmed = title.trim();
-    if (trimmed.isEmpty) return '#';
-    // Deliberately the first UTF-16 code unit, matching what the old
-    // `split('')` walked, so existing sections do not move.
-    final first = trimmed[0].toUpperCase();
-    return _letterPattern.hasMatch(first) ? first : '#';
+  /// Strips leading `[...]` / `(...)` tags.
+  ///
+  /// Files pulled off YouTube arrive titled `[1080P] ...`, `( 歌詞 ) ...`,
+  /// `[4K _ 60fps] ...`. Indexing on those puts most of a library under a
+  /// single letter — and under '#', since they start with punctuation — which
+  /// is the same as having no index at all.
+  static String _withoutLeadingTags(String value) {
+    var rest = value.trimLeft();
+
+    while (rest.isNotEmpty) {
+      final close = switch (rest[0]) {
+        '[' => ']',
+        '(' => ')',
+        '（' => '）',
+        '【' => '】',
+        _ => null,
+      };
+      if (close == null) break;
+
+      final end = rest.indexOf(close);
+      if (end < 0) break;
+      rest = rest.substring(end + 1).trimLeft();
+    }
+
+    // A title that is nothing but a tag keeps its original text; dropping it
+    // entirely would leave the row with no sort position at all.
+    return rest.isEmpty ? value.trimLeft() : rest;
+  }
+
+  static String _sortKey(String value) {
+    final stripped = _withoutLeadingTags(value);
+    if (!_han.hasMatch(stripped)) return stripped.toLowerCase();
+
+    return PinyinHelper.getPinyinE(
+      stripped,
+      separator: ' ',
+      format: PinyinFormat.WITHOUT_TONE,
+    ).toLowerCase();
+  }
+
+  static String _indexLetterOf(String value) {
+    final stripped = _withoutLeadingTags(value);
+
+    for (final char in stripped.split('')) {
+      if (_han.hasMatch(char)) {
+        final pinyin = PinyinHelper.getFirstWordPinyin(char);
+        if (pinyin.isEmpty) return '#';
+        final letter = pinyin[0].toUpperCase();
+        return _letterPattern.hasMatch(letter) ? letter : '#';
+      }
+
+      final upper = char.toUpperCase();
+      if (_letterPattern.hasMatch(upper)) return upper;
+      // Numbers get their own bucket; anything else — punctuation, spaces,
+      // scripts with no letter of their own — is skipped so a stray dash does
+      // not decide the whole row.
+      if (_digitPattern.hasMatch(char)) return '#';
+    }
+    return '#';
   }
 
   static String _clean(String? value, String fallback) {
