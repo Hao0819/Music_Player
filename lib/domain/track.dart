@@ -7,7 +7,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 /// Nothing here is ever persisted: folders, favorites and history all
 /// reference a track by [path], and metadata is re-read on every scan.
 class Track {
-  const Track({
+  Track({
     required this.id,
     required this.title,
     required this.artist,
@@ -59,13 +59,37 @@ class Track {
   final DateTime dateAdded;
   final String format;
 
+  /// Lower-cased copies used for sorting and searching.
+  ///
+  /// Computed once per track instead of per comparison. Sorting a library of
+  /// a thousand runs on the order of ten thousand comparisons, and doing
+  /// `toLowerCase()` inside each one allocated two strings every time — on
+  /// every keystroke, because the sort reruns whenever the query changes.
+  late final String titleKey = title.toLowerCase();
+  late final String artistKey = artist.toLowerCase();
+  late final String albumKey = album.toLowerCase();
+
+  /// Everything a text query is matched against, lower-cased and joined once.
+  ///
+  /// This used to be rebuilt per track per keystroke, which is two string
+  /// allocations times the size of the library for every character typed.
+  late final String searchHaystack = '$title $artist $album'.toLowerCase();
+
   /// First letter used by the A–Z index, or '#' for anything non-alphabetic.
-  String get indexLetter {
-    for (final char in title.trim().toUpperCase().split('')) {
-      if (RegExp('[A-Z]').hasMatch(char)) return char;
-      break;
-    }
-    return '#';
+  ///
+  /// Also cached: building the index bar asks every track for this, and the
+  /// old version compiled a fresh [RegExp] on each call.
+  late final String indexLetter = _computeIndexLetter();
+
+  static final _letterPattern = RegExp('[A-Z]');
+
+  String _computeIndexLetter() {
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) return '#';
+    // Deliberately the first UTF-16 code unit, matching what the old
+    // `split('')` walked, so existing sections do not move.
+    final first = trimmed[0].toUpperCase();
+    return _letterPattern.hasMatch(first) ? first : '#';
   }
 
   static String _clean(String? value, String fallback) {

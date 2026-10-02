@@ -22,4 +22,37 @@ void main() {
   test('requires every term to match', () {
     expect(fuzzyMatches('beatles zeppelin', fields), isFalse);
   });
+
+  group('hoisted matching', () {
+    test('queryTerms splits and lower-cases once', () {
+      expect(queryTerms('  Beatles   Yesterday '), ['beatles', 'yesterday']);
+      expect(queryTerms('   '), isEmpty);
+      expect(queryTerms(''), isEmpty);
+    });
+
+    test('an empty query matches everything, same as before', () {
+      expect(matchesTerms(queryTerms(''), 'anything at all'), isTrue);
+    });
+
+    test('agrees with the field-joining version it replaced', () {
+      const fields = ['Yesterday', 'The Beatles', 'Help!'];
+      final haystack = fields.join(' ').toLowerCase();
+
+      for (final query in [
+        'beatles yesterday',
+        'BEATLES',
+        'help',
+        'yesterday beatles help',
+        'nope',
+        'beat les',
+        '',
+      ]) {
+        expect(
+          matchesTerms(queryTerms(query), haystack),
+          fuzzyMatches(query, fields),
+          reason: 'disagreed on "$query"',
+        );
+      }
+    });
+  });
 }

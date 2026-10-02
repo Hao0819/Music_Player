@@ -179,8 +179,16 @@ class AppTheme {
     );
   }
 
-  static ThemeData light() => _build(Brightness.light);
-  static ThemeData dark() => _build(Brightness.dark);
+  // Built once, lazily. `_build` runs a full `ColorScheme.fromSeed` — an HCT
+  // colour-space pass that generates every tonal palette — and then assembles
+  // a ThemeData carrying fifteen text styles and a dozen component themes.
+  // These were being rebuilt on every `MaterialApp` build, so switching
+  // appearance paid for both of them at the exact moment it was animating.
+  static final ThemeData _light = _build(Brightness.light);
+  static final ThemeData _dark = _build(Brightness.dark);
+
+  static ThemeData light() => _light;
+  static ThemeData dark() => _dark;
 
   /// Replaces the seed scheme's tinted neutrals with the flat graphite/paper
   /// ladder. Takes the accent roles from [scheme] untouched, so this is safe

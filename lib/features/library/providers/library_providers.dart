@@ -179,11 +179,11 @@ final visibleLibraryProvider = Provider<AsyncValue<List<Track>>>((ref) {
 int _compare(Track a, Track b, LibrarySortField field) {
   switch (field) {
     case LibrarySortField.title:
-      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      return a.titleKey.compareTo(b.titleKey);
     case LibrarySortField.artist:
-      return a.artist.toLowerCase().compareTo(b.artist.toLowerCase());
+      return a.artistKey.compareTo(b.artistKey);
     case LibrarySortField.album:
-      return a.album.toLowerCase().compareTo(b.album.toLowerCase());
+      return a.albumKey.compareTo(b.albumKey);
     case LibrarySortField.dateAdded:
       return a.dateAdded.compareTo(b.dateAdded);
     case LibrarySortField.duration:

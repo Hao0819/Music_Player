@@ -15,9 +15,12 @@ List<Track> filterTracks({
   DateTime? now,
 }) {
   final addedCutoff = (now ?? DateTime.now()).subtract(LibraryFilterState.recencyWindow);
+  // Hoisted: normalising and splitting the query is per-query work, not
+  // per-track work.
+  final terms = queryTerms(query);
 
   return tracks.where((track) {
-    if (!fuzzyMatches(query, [track.title, track.artist, track.album])) return false;
+    if (!matchesTerms(terms, track.searchHaystack)) return false;
     if (filter.formats.isNotEmpty && !filter.formats.contains(track.format)) return false;
     if (track.duration < filter.minDuration) return false;
     if (filter.hasUpperDurationLimit && track.duration > filter.maxDuration) return false;

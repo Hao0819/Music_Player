@@ -158,6 +158,43 @@ void main() {
     });
   });
 
+  group('theme caching', () {
+    // Building a theme runs a full ColorScheme.fromSeed pass. These were being
+    // rebuilt on every MaterialApp build, which is what made switching
+    // appearance stutter — the cost landed exactly while it was animating.
+    test('the app themes are built once', () {
+      expect(identical(AppTheme.light(), AppTheme.light()), isTrue);
+      expect(identical(AppTheme.dark(), AppTheme.dark()), isTrue);
+      expect(identical(AppTheme.light(), AppTheme.dark()), isFalse);
+    });
+
+    test('accent themes are reused per accent and brightness', () {
+      const accent = Color(0xFFD1427A);
+      final dark = themeForAccent(accent, Brightness.dark);
+
+      expect(identical(themeForAccent(accent, Brightness.dark), dark), isTrue);
+      expect(identical(themeForAccent(accent, Brightness.light), dark), isFalse);
+      expect(identical(themeForAccent(const Color(0xFF2A9D5C), Brightness.dark), dark), isFalse);
+    });
+
+    test('the accent cache is bounded', () {
+      // Otherwise it would end up holding one ThemeData per track in the
+      // library, each carrying a full palette and text theme.
+      const probe = Color(0xFF112233);
+      final first = themeForAccent(probe, Brightness.dark);
+
+      for (var i = 0; i < 24; i++) {
+        themeForAccent(Color(0xFF400000 + i * 0x1111), Brightness.dark);
+      }
+
+      expect(
+        identical(themeForAccent(probe, Brightness.dark), first),
+        isFalse,
+        reason: 'the cache kept growing instead of evicting',
+      );
+    });
+  });
+
   group('folder colours', () {
     test('a chosen colour wins over the one derived from the name', () {
       const picked = Color(0xFF8E57D6);

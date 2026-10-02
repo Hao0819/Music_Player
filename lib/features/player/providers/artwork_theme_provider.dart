@@ -62,10 +62,25 @@ final currentArtworkBytesProvider = Provider<Uint8List?>((ref) {
   return ref.watch(artworkBytesProvider(id)).value;
 });
 
+/// Themes already built, keyed by accent and brightness.
+///
+/// Building one is expensive — a full `ColorScheme.fromSeed` pass plus a
+/// complete ThemeData — and it is a pure function of those two inputs, so it
+/// is worth keeping. Insertion-ordered and capped: the accents that matter are
+/// the ones recently played, and an unbounded map would hold a ThemeData per
+/// track in the library.
+final _accentThemes = <(int, Brightness), ThemeData>{};
+const _accentThemeCacheSize = 16;
+
 /// Builds the full theme for an accent, falling back to the app's own signal
 /// blue so a track without art still gets a coherent screen rather than a
 /// colourless one.
 ThemeData themeForAccent(Color? accent, Brightness brightness) {
+  final key = ((accent ?? AppTheme.signal).toARGB32(), brightness);
+
+  final cached = _accentThemes[key];
+  if (cached != null) return cached;
+
   final scheme = AppTheme.neutralize(
     ColorScheme.fromSeed(
       seedColor: accent ?? AppTheme.signal,
@@ -73,5 +88,11 @@ ThemeData themeForAccent(Color? accent, Brightness brightness) {
       dynamicSchemeVariant: DynamicSchemeVariant.vibrant,
     ),
   );
-  return AppTheme.themeFor(scheme);
+  final theme = AppTheme.themeFor(scheme);
+
+  if (_accentThemes.length >= _accentThemeCacheSize) {
+    _accentThemes.remove(_accentThemes.keys.first);
+  }
+  _accentThemes[key] = theme;
+  return theme;
 }
