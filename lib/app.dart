@@ -41,6 +41,11 @@ class _RootShell extends ConsumerStatefulWidget {
 class _RootShellState extends ConsumerState<_RootShell> {
   int _index = 0;
 
+  /// Asked once per launch, and only after the audio permission is in hand.
+  /// Android itself stops showing the dialog once it has been refused, so this
+  /// only guards against asking twice in one session.
+  bool _askedAboutNotifications = false;
+
   static const _screens = [
     LibraryScreen(),
     FoldersScreen(),
@@ -61,6 +66,18 @@ class _RootShellState extends ConsumerState<_RootShell> {
         }
         // Brings back last time's song, paused, and keeps saving it.
         ref.watch(playbackSessionProvider);
+
+        // The media notification needs its own runtime permission on Android
+        // 13+, and nothing was ever asking for it — so the lock-screen
+        // controls could not appear no matter how well the audio session
+        // registered. Asked after the first frame, never as a gate: the app
+        // works without it.
+        if (!_askedAboutNotifications) {
+          _askedAboutNotifications = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) ref.read(notificationPermissionProvider.notifier).request();
+          });
+        }
 
         return Scaffold(
           body: IndexedStack(index: _index, children: _screens),

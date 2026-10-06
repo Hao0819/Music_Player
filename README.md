@@ -130,6 +130,16 @@ rather than created by hand:
   amplitudes would be far too slow on a phone. It is stable per track, so a
   song always looks the same.
 
+### Lock screen and notification controls
+`audio_service` posts a media notification with play/pause and skip, which is
+also what the lock screen shows. On Android 13+ that needs the
+`POST_NOTIFICATIONS` runtime permission: it was declared in the manifest but
+nothing ever requested it, so the notification was created and then silently
+dropped by the system. It is asked for after the first frame — never as a gate,
+since the app works without it — and **Settings → Playback → Lock screen
+controls** reports the state and links out to system settings, because Android
+shows the dialog once and a refusal cannot be re-requested.
+
 ### Settings
 - **Rescan device** on demand
 - **Clean up missing files** — removes folder links and history entries left

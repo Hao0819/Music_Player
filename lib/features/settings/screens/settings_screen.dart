@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/utils/date_format.dart';
 
 import '../../download/screens/download_screen.dart';
 import '../../library/providers/library_providers.dart';
+import '../../../services/permissions/permission_provider.dart';
 import '../providers/backup_providers.dart';
 import '../providers/maintenance_providers.dart';
 import '../providers/theme_mode_provider.dart';
@@ -53,6 +55,10 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ),
           ),
+          const SizedBox(height: 28),
+
+          _SectionHeader(title: 'Playback'),
+          _NotificationPermissionTile(),
           const SizedBox(height: 28),
 
           _SectionHeader(title: 'Library'),
@@ -170,6 +176,44 @@ class SettingsScreen extends ConsumerWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Cleaned up records for missing files')),
+    );
+  }
+}
+
+/// Whether the media notification may appear, and a way to fix it when it may
+/// not.
+///
+/// Worth a row of its own because the dialog is shown once: Android stops
+/// offering it after a refusal, so from then on the only route back is the
+/// system settings page, and nothing in the app was pointing at it.
+class _NotificationPermissionTile extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(notificationPermissionProvider).value;
+    final granted = status?.isGranted ?? true;
+
+    return ListTile(
+      leading: Icon(granted ? Icons.lock_open_outlined : Icons.lock_outline),
+      title: const Text('Lock screen controls'),
+      subtitle: Text(
+        granted
+            ? 'The player shows on the lock screen and in the notification shade'
+            : "Blocked — the player can't appear on the lock screen or in the shade",
+      ),
+      trailing: granted ? null : const Icon(Icons.chevron_right),
+      onTap: granted
+          ? null
+          : () async {
+              final notifier = ref.read(notificationPermissionProvider.notifier);
+              // A refused permission cannot be re-requested; the call would
+              // return straight away and nothing would happen on screen.
+              if (status != null && status.isPermanentlyDenied) {
+                await ref.read(permissionServiceProvider).openSettings();
+              } else {
+                await notifier.request();
+              }
+              await notifier.refresh();
+            },
     );
   }
 }

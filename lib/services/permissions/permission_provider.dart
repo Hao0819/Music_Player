@@ -22,3 +22,26 @@ class AudioPermissionNotifier extends AsyncNotifier<PermissionStatus> {
 
 final audioPermissionProvider =
     AsyncNotifierProvider<AudioPermissionNotifier, PermissionStatus>(AudioPermissionNotifier.new);
+
+/// Whether the media notification is allowed to appear.
+///
+/// Kept apart from the audio permission because nothing is gated on it: the app
+/// runs either way, and denying it costs the lock-screen and notification-shade
+/// controls rather than the library.
+class NotificationPermissionNotifier extends AsyncNotifier<PermissionStatus> {
+  @override
+  Future<PermissionStatus> build() => ref.read(permissionServiceProvider).notificationStatus();
+
+  Future<void> request() async {
+    state = AsyncData(await ref.read(permissionServiceProvider).requestNotification());
+  }
+
+  Future<void> refresh() async {
+    state = AsyncData(await ref.read(permissionServiceProvider).notificationStatus());
+  }
+}
+
+final notificationPermissionProvider =
+    AsyncNotifierProvider<NotificationPermissionNotifier, PermissionStatus>(
+  NotificationPermissionNotifier.new,
+);
