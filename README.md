@@ -279,6 +279,24 @@ anything a downloader dropped into `Download/`. So the library is the union of:
 Results are merged by path, then noise paths (WhatsApp audio and voice notes)
 are dropped — see `_excludedPathFragments` in `audio_library_repository.dart`.
 
+**The two passes are not awaited together.** `startScan()` returns the plugin's
+rows as `firstPass` and the merged union as `complete`, because the native query
+walks every volume and is far the slower of the two — while the plugin's result
+alone is usually the whole library. The list paints on the first pass; the
+second is merged in when it arrives, or skipped entirely when it found nothing
+new (`complete` resolves to null). The Hive bookkeeping that records what the
+scan saw runs after that, so a disk write never sits between the scan and the
+first frame.
+
+A rescan also **reuses the previous `Track` objects** for files whose metadata
+is unchanged (`Track.matches`). `Track` computes its sort keys, index letters
+and search haystack lazily and caches them per instance, so replacing every
+object made the next sort recompute all of it — romanising every Han title
+again — even though a rescan usually finds the library exactly as it left it.
+Measured on a desktop VM: ~60–150 ms of key work per rescan before, 0.2 ms
+after. The romanisation itself is additionally cached by source string, since
+artists and albums repeat across a library.
+
 Favorites is implemented as a folder with `isSystem: true` rather than a
 separate table, so it reuses the same linking code as every other folder.
 

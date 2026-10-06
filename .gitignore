@@ -49,3 +49,6 @@ app.*.map.json
 
 # Claude Code (local agent config and project skills)
 .claude/
+
+# Kotlin compiler session files, written during Gradle builds
+android/.kotlin/

@@ -12,13 +12,29 @@ const _excludedPathFragments = [
   '/whatsapp business/media/whatsapp business voice notes/',
 ];
 
+/// Two scans in flight, with the quicker one separated out so a caller can
+/// show something before the slower one finishes.
+class LibraryScan {
+  LibraryScan({required this.firstPass, required this.complete});
+
+  /// Rows from `on_audio_query` alone — the audio collection on the primary
+  /// volume, which on a typical device is nearly the whole library, and the
+  /// source with the best metadata.
+  final Future<List<Track>> firstPass;
+
+  /// The union with the broader native query, or null when that query turned
+  /// up nothing [firstPass] did not already have — which is the common case,
+  /// and lets a caller skip re-sorting an identical list.
+  final Future<List<Track>?> complete;
+}
+
 class AudioLibraryRepository {
   AudioLibraryRepository(this._query, this._scanner);
 
   final OnAudioQuery _query;
   final MediaStoreScanner _scanner;
 
-  /// Combines two scans and keeps the union:
+  /// Starts both scans at once and hands back their results separately:
   ///
   /// * `on_audio_query` — well-parsed rows from the audio collection, which
   ///   carry the best metadata.
@@ -26,21 +42,41 @@ class AudioLibraryRepository {
   ///   generic files (common for Download folders) and other volumes.
   ///
   /// Plugin rows win on conflict since their metadata is richer.
+  ///
+  /// They are kept apart rather than awaited together because the native query
+  /// walks every volume and is the slower of the two by a long way. Holding the
+  /// list back until both returned is what made launch a load screen, even
+  /// though the first result alone is usually the entire library.
+  LibraryScan startScan() {
+    final pluginRows = _queryViaPlugin();
+    final nativeRows = _scanner.queryAudioFiles();
+
+    final firstPass = pluginRows.then((tracks) => tracks.where(_isWanted).toList());
+
+    return LibraryScan(
+      firstPass: firstPass,
+      complete: Future(() async {
+        final plugin = await firstPass;
+        final native = await nativeRows;
+
+        final byPath = {for (final track in plugin) track.path: track};
+        var added = false;
+        for (final track in native) {
+          // Plugin rows win, so a path already present is left alone.
+          if (byPath.containsKey(track.path) || !_isWanted(track)) continue;
+          byPath[track.path] = track;
+          added = true;
+        }
+
+        return added ? byPath.values.toList() : null;
+      }),
+    );
+  }
+
+  /// The union of both scans, for callers that only want a final answer.
   Future<List<Track>> fetchTracks() async {
-    final results = await Future.wait([
-      _queryViaPlugin(),
-      _scanner.queryAudioFiles(),
-    ]);
-
-    final byPath = <String, Track>{};
-    for (final track in results[1]) {
-      byPath[track.path] = track;
-    }
-    for (final track in results[0]) {
-      byPath[track.path] = track;
-    }
-
-    return byPath.values.where(_isWanted).toList();
+    final scan = startScan();
+    return await scan.complete ?? await scan.firstPass;
   }
 
   Future<List<Track>> _queryViaPlugin() async {

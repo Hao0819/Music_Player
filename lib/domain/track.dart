@@ -81,6 +81,22 @@ class Track {
   /// and would need this to hold both.)
   late final String searchHaystack = '$title $artist $album'.toLowerCase();
 
+  /// Whether [other] describes the same file with the same metadata, so this
+  /// instance's already-computed keys are still correct for it.
+  ///
+  /// Everything a row shows is compared, not just the path: reusing an
+  /// instance whose title had changed would leave the list showing metadata
+  /// the scan has already corrected.
+  bool matches(Track other) =>
+      id == other.id &&
+      path == other.path &&
+      title == other.title &&
+      artist == other.artist &&
+      album == other.album &&
+      duration == other.duration &&
+      format == other.format &&
+      dateAdded == other.dateAdded;
+
   /// First letter used by the A–Z index, per field, so the strip agrees with
   /// whichever column the list is currently sorted on. It used to be derived
   /// from the title whatever the sort was, which made every jump wrong while
@@ -92,6 +108,31 @@ class Track {
   static final _letterPattern = RegExp('[A-Z]');
   static final _digitPattern = RegExp('[0-9]');
   static final _han = RegExp(r'[㐀-䶿一-鿿豈-﫿]');
+
+  /// Derived strings cached by their source text rather than per track.
+  ///
+  /// Two things make this pay. Artists and albums repeat heavily — a folder
+  /// of one artist is thirty rows holding the same two strings — and a rescan
+  /// builds a fresh set of Track objects even for files that have not changed,
+  /// discarding every key those instances had computed. Keying on the text
+  /// means each distinct string is romanised once for the life of the process
+  /// instead of once per row per scan.
+  static final Map<String, String> _sortKeys = {};
+  static final Map<String, String> _indexLetters = {};
+
+  /// Bounded so a pathological library cannot grow these without limit. The
+  /// oldest entry goes first, and a miss only costs what it used to cost, so
+  /// the eviction order does not need to be clever.
+  static const _maxCachedKeys = 6000;
+
+  static String _cached(Map<String, String> cache, String value, String Function() compute) {
+    final hit = cache[value];
+    if (hit != null) return hit;
+
+    final computed = compute();
+    if (cache.length >= _maxCachedKeys) cache.remove(cache.keys.first);
+    return cache[value] = computed;
+  }
 
   /// Strips leading `[...]` / `(...)` tags.
   ///
@@ -122,7 +163,9 @@ class Track {
     return rest.isEmpty ? value.trimLeft() : rest;
   }
 
-  static String _sortKey(String value) {
+  static String _sortKey(String value) => _cached(_sortKeys, value, () => _computeSortKey(value));
+
+  static String _computeSortKey(String value) {
     final stripped = _withoutLeadingTags(value);
     if (!_han.hasMatch(stripped)) return stripped.toLowerCase();
 
@@ -133,7 +176,10 @@ class Track {
     ).toLowerCase();
   }
 
-  static String _indexLetterOf(String value) {
+  static String _indexLetterOf(String value) =>
+      _cached(_indexLetters, value, () => _computeIndexLetter(value));
+
+  static String _computeIndexLetter(String value) {
     final stripped = _withoutLeadingTags(value);
 
     for (final char in stripped.split('')) {

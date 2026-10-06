@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
@@ -56,6 +59,15 @@ final knownTracksTickProvider =
     NotifierProvider<KnownTracksTickNotifier, int>(KnownTracksTickNotifier.new);
 
 class LibraryScanNotifier extends AsyncNotifier<List<Track>> {
+  /// The last list this notifier produced, kept so a rescan can hand back the
+  /// very same [Track] objects for files that have not changed. Not read from
+  /// `state`, which is not available while [build] is still running.
+  List<Track> _previous = const [];
+
+  /// Distinguishes scans, so the tail end of one that has been superseded does
+  /// not publish its result over a newer one.
+  int _token = 0;
+
   @override
   Future<List<Track>> build() => _scan();
 
@@ -65,21 +77,70 @@ class LibraryScanNotifier extends AsyncNotifier<List<Track>> {
     state = await AsyncValue.guard(_scan);
   }
 
+  /// Resolves as soon as the plugin's rows are ready; the broader native pass
+  /// and the Hive bookkeeping both land afterwards, through [_finish].
   Future<List<Track>> _scan() async {
-    final tracks = await ref.read(audioLibraryRepositoryProvider).fetchTracks();
+    final token = ++_token;
+    final scan = ref.read(audioLibraryRepositoryProvider).startScan();
+    final firstPass = _reusing(await scan.firstPass);
 
-    // Record what this scan saw so new arrivals and vanished files can both
-    // be surfaced. Never let bookkeeping failure break the library itself.
+    // Deliberately not awaited: it continues after this future completes, and
+    // therefore after build() has returned, which is what makes assigning
+    // state from it legal.
+    unawaited(_finish(scan, token));
+
+    return firstPass;
+  }
+
+  /// Merges the second pass and records the scan, in that order, once the list
+  /// on screen is already usable.
+  Future<void> _finish(LibraryScan scan, int token) async {
+    try {
+      final merged = await scan.complete;
+      if (!_isCurrent(token)) return;
+      // Null means the broader pass found nothing new, so the list on screen
+      // is already the final answer and re-publishing it would only cost a
+      // re-sort of every row.
+      if (merged != null) state = AsyncData(_reusing(merged));
+    } catch (error) {
+      // The second pass is an addition to a list that already works, so a
+      // failure here must not replace the library with an error.
+      debugPrint('The broader MediaStore pass failed: $error');
+    }
+
+    if (!_isCurrent(token)) return;
+
+    // Bookkeeping last, and off the critical path: it writes to Hive, and
+    // doing that before returning the tracks put a disk write between the scan
+    // finishing and the first frame that could show it.
     try {
       await ref.read(knownTracksRepositoryProvider).reconcile({
-        for (final track in tracks) track.path: track.id,
+        for (final track in _previous) track.path: track.id,
       });
-      ref.read(knownTracksTickProvider.notifier).bump();
+      if (_isCurrent(token)) ref.read(knownTracksTickProvider.notifier).bump();
     } catch (_) {
       // Bookkeeping is best-effort.
     }
+  }
 
-    return tracks;
+  /// Whether [token] is still the live scan and the provider is still alive.
+  bool _isCurrent(int token) => token == _token && ref.mounted;
+
+  /// Swaps in the previous [Track] instance wherever the file is unchanged.
+  ///
+  /// Track computes its sort keys, index letters and search haystack on first
+  /// use and caches them on the instance. A scan that replaces every object
+  /// throws all of that away and pays for it again on the next sort, which is
+  /// most of what made a rescan stutter — even though a rescan usually finds
+  /// the library exactly as it left it.
+  List<Track> _reusing(List<Track> scanned) {
+    if (_previous.isEmpty) return _previous = scanned;
+
+    final existing = {for (final track in _previous) track.path: track};
+    return _previous = [
+      for (final track in scanned)
+        if (existing[track.path] case final known? when known.matches(track)) known else track,
+    ];
   }
 }
 
