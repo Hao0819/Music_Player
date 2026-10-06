@@ -109,14 +109,22 @@ rather than created by hand:
   hidden or removable — cancel it first
 
 ### Appearance
-- Light / dark / follow-system theme, on a blue Material colour scheme. The
-  secondary tones are pinned to blue by hand, because even a blue seed leaves
-  Material's "vibrant" variant with violet chips and navigation indicators
-- Your own folders are a grid of gradient cards, each folder keeping its own
-  colour from a hash of its name; folders open on a matching hero header with
-  track count, total duration and Play / Shuffle
-- The library has a Shuffle-all header, and the mini player is a rounded card
-  floating above the navigation bar with a gradient play button
+- **Black and white only.** Light / dark / follow-system, and in both modes the
+  app has no hue of its own anywhere: emphasis is the far end of the greyscale,
+  so the primary button is black-on-paper in light mode and white-on-ink in
+  dark. Every one of the colour scheme's 46 roles is pinned neutral and a test
+  asserts it channel by channel — Material derives `primaryContainer`,
+  `tertiary`, `error` and the fixed variants from the seed, and those come back
+  coloured whatever the seed is
+- The only colour on screen is album art. Playlists therefore have no colour of
+  their own, and there is no recolour action
+- Playlists are a list of rows: cover, name, song count. A playlist's cover is
+  a picture the user chose for it, else the first track in it that actually has
+  artwork, else the same plain record every uncovered track gets
+- The mini player is an inverted card — near-black on a paper screen, white on
+  an ink one — with the position as a hairline along its bottom edge
+- The playing row sits on a raised rounded block with a level meter over its
+  cover, rather than changing colour
 - The Now Playing scrubber is drawn as a waveform. Its shape comes from a hash
   of the track id, **not** from the audio — decoding every file for real
   amplitudes would be far too slow on a phone. It is stable per track, so a

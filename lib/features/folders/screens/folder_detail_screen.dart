@@ -15,6 +15,8 @@ import '../../player/providers/player_providers.dart';
 import '../../player/widgets/mini_player.dart';
 import '../providers/folder_providers.dart';
 import '../widgets/folder_name_dialog.dart';
+import 'folders_screen.dart';
+import '../widgets/playlist_cover.dart';
 
 final _folderDetailSelectionProvider = NotifierProvider<SelectionNotifier, Set<String>>(SelectionNotifier.new);
 
@@ -134,7 +136,8 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
                   PopupMenuButton<String>(
                     onSelected: (action) => _handleMenuAction(context, action),
                     itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Rename or recolour')),
+                      PopupMenuItem(value: 'cover', child: Text('Change cover')),
+                      PopupMenuItem(value: 'edit', child: Text('Rename')),
                       PopupMenuItem(value: 'delete', child: Text('Delete')),
                     ],
                   ),
@@ -226,20 +229,19 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
     final folder = ref.read(folderByIdProvider(folderId));
     if (folder == null) return;
 
+    if (action == 'cover') {
+      await handleFolderAction(context, ref, folder, 'cover');
+      return;
+    }
+
     if (action == 'edit') {
-      final result = await promptForFolder(
+      final name = await promptForFolder(
         context,
         initialName: folder.name,
-        initialColor: folder.colorValue,
-        title: 'Edit folder',
+        title: 'Rename playlist',
       );
-      if (result != null) {
-        await ref.read(folderActionsProvider).editFolder(
-              folderId,
-              result.name,
-              colorValue: result.colorValue,
-              setColor: true,
-            );
+      if (name != null) {
+        await ref.read(folderActionsProvider).editFolder(folderId, name);
       }
       return;
     }
@@ -247,7 +249,7 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete folder?'),
+        title: const Text('Delete playlist?'),
         content: Text('This only removes "${folder.name}" — your audio files are not affected.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -332,8 +334,8 @@ class _FolderPlayHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final controller = ref.read(playerControllerProvider);
-    final base = AppTheme.folderColor(folder.name, folder.colorValue);
     final total = tracks.fold(Duration.zero, (sum, track) => sum + track.duration);
 
     return Padding(
@@ -341,38 +343,50 @@ class _FolderPlayHeader extends ConsumerWidget {
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 96,
-                height: 96,
+              // The folder's first cover, not a coloured folder glyph. A
+              // folder is identified by what is in it, and one real sleeve
+              // says that faster than a tinted icon ever did.
+              DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                  gradient: AppTheme.accentGradient(base),
                   boxShadow: [
                     BoxShadow(
-                      color: base.withValues(alpha: 0.35),
+                      color: Colors.black.withValues(alpha: 0.28),
                       blurRadius: 18,
                       offset: const Offset(0, 8),
                     ),
                   ],
                 ),
-                child: Icon(Icons.folder_rounded, color: AppTheme.onAccent(base), size: 42),
+                child: PlaylistCover(
+                  folderId: folder.id,
+                  size: 104,
+                  borderRadius: AppTheme.radiusMedium,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Kind and size first, in small grey type, then the name
+                    // large — the order the reference uses, and the one that
+                    // lets a long folder name have the whole line to itself.
+                    Text(
+                      'Playlist  ·  ${tracks.length} ${tracks.length == 1 ? 'song' : 'songs'}'
+                      '  ·  ${formatDuration(total)}',
+                      style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 6),
                     Text(
                       folder.name,
-                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.1,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'} · ${formatDuration(total)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -384,15 +398,15 @@ class _FolderPlayHeader extends ConsumerWidget {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  icon: const Icon(Icons.play_arrow),
+                  icon: const Icon(Icons.play_arrow, size: 20),
                   label: const Text('Play'),
                   onPressed: () => controller.playTracks(tracks),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: FilledButton.tonalIcon(
-                  icon: const Icon(Icons.shuffle),
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.shuffle, size: 18),
                   label: const Text('Shuffle'),
                   onPressed: () => controller.shufflePlay(tracks),
                 ),

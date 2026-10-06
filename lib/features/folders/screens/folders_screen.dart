@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -10,6 +14,7 @@ import '../../settings/providers/maintenance_providers.dart';
 import '../../settings/screens/new_audio_screen.dart';
 import '../providers/folder_providers.dart';
 import '../widgets/folder_name_dialog.dart';
+import '../widgets/playlist_cover.dart';
 import 'folder_detail_screen.dart';
 
 class FoldersScreen extends ConsumerWidget {
@@ -22,22 +27,7 @@ class FoldersScreen extends ConsumerWidget {
     final userFolders = folders.where((folder) => !folder.isSystem).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Folders'),
-        actions: [
-          IconButton(
-            tooltip: 'New folder',
-            icon: const Icon(Icons.create_new_folder_outlined),
-            onPressed: () async {
-              final result = await promptForFolder(context);
-              if (result == null) return;
-              await ref
-                  .read(folderActionsProvider)
-                  .createFolder(result.name, colorValue: result.colorValue);
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Playlists')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
@@ -46,32 +36,18 @@ class FoldersScreen extends ConsumerWidget {
           const _HistoryTile(view: HistoryView.recentlyPlayed),
           const _HistoryTile(view: HistoryView.mostPlayed),
           for (final folder in systemFolders) _FolderListTile(folder: folder),
-          const _SectionLabel('Your folders'),
+          _CreatedHeader(count: userFolders.length),
           if (userFolders.isEmpty)
             const Padding(
-              padding: EdgeInsets.only(top: 40),
+              padding: EdgeInsets.only(top: 32),
               child: EmptyState(
-                icon: Icons.folder_outlined,
-                title: 'No folders yet',
-                message: 'Tap the folder+ icon to create one — folders organize tracks without touching the files.',
+                icon: Icons.queue_music,
+                title: 'No playlists yet',
+                message: 'Tap + to make one — a playlist groups tracks without moving or copying any files.',
               ),
             )
           else
-            // A grid of coloured cards rather than another run of identical
-            // rows, so your own folders are the part that stands out.
-            GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.35,
-              ),
-              itemCount: userFolders.length,
-              itemBuilder: (context, index) => _FolderCard(folder: userFolders[index]),
-            ),
+            for (final folder in userFolders) _PlaylistRow(folder: folder),
         ],
       ),
     );
@@ -161,7 +137,7 @@ class _FolderListTile extends ConsumerWidget {
           : PopupMenuButton<String>(
               onSelected: (action) => handleFolderAction(context, ref, folder, action),
               itemBuilder: (context) => const [
-                PopupMenuItem(value: 'edit', child: Text('Rename or recolour')),
+                PopupMenuItem(value: 'edit', child: Text('Rename')),
                 PopupMenuItem(value: 'delete', child: Text('Delete')),
               ],
             ),
@@ -198,9 +174,9 @@ class _RoundIcon extends StatelessWidget {
       height: 44,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-        color: scheme.primaryContainer.withValues(alpha: 0.7),
+        color: scheme.surfaceContainerHigh,
       ),
-      child: Icon(icon, color: scheme.onPrimaryContainer, size: 22),
+      child: Icon(icon, color: scheme.onSurface, size: 22),
     );
   }
 }
@@ -226,109 +202,144 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-/// A gradient card for a user folder. Each folder keeps its own colour from
-/// [AppTheme.gradientFor], which is what makes the grid readable at a glance.
-class _FolderCard extends ConsumerWidget {
-  const _FolderCard({required this.folder});
+/// The heading above the user's own playlists, with the count and a + beside
+/// it — the shape the reference screenshot uses, where making a playlist is an
+/// action on the list rather than an icon up in the app bar.
+class _CreatedHeader extends ConsumerWidget {
+  const _CreatedHeader({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 8, 4),
+      child: Row(
+        children: [
+          Text(
+            'CREATED PLAYLIST',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$count',
+            style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline),
+          ),
+          const Spacer(),
+          IconButton(
+            tooltip: 'New playlist',
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              final name = await promptForFolder(context);
+              if (name == null) return;
+              await ref.read(folderActionsProvider).createFolder(name);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One playlist: its cover, its name, how many songs are in it.
+///
+/// A row rather than a grid cell. A grid of two columns gave each playlist a
+/// large cover and a cramped name, and these are named things — `david tao`,
+/// `粤语` — that you pick by reading, not by recognising a sleeve.
+class _PlaylistRow extends ConsumerWidget {
+  const _PlaylistRow({required this.folder});
 
   final FolderModel folder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final count = ref.watch(folderTracksProvider(folder.id)).value?.tracks.length;
-    final base = AppTheme.folderColor(folder.name, folder.colorValue);
-    final onBase = AppTheme.onAccent(base);
+    final scheme = theme.colorScheme;
+    final contents = ref.watch(folderTracksProvider(folder.id)).value;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        gradient: AppTheme.accentGradient(base),
-        boxShadow: [
-          BoxShadow(
-            color: base.withValues(alpha: 0.32),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
+    return InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => FolderDetailScreen(folderId: folder.id)),
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => FolderDetailScreen(folderId: folder.id)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 4, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.folder_rounded, color: onBase, size: 26),
-                    const Spacer(),
-                    PopupMenuButton<String>(
-                      icon: Icon(Icons.more_vert, color: onBase.withValues(alpha: 0.75), size: 20),
-                      onSelected: (action) => handleFolderAction(context, ref, folder, action),
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(value: 'edit', child: Text('Rename or recolour')),
-                        PopupMenuItem(value: 'delete', child: Text('Delete')),
-                      ],
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Text(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+        child: Row(
+          children: [
+            PlaylistCover(folderId: folder.id, size: 60, borderRadius: 8),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
                     folder.name,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: onBase,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  count == null ? '—' : '$count track${count == 1 ? '' : 's'}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: onBase.withValues(alpha: 0.75),
+                  const SizedBox(height: 3),
+                  Text(
+                    _subtitle(contents),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                   ),
-                ),
+                ],
+              ),
+            ),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert, color: scheme.onSurfaceVariant, size: 20),
+              onSelected: (action) => handleFolderAction(context, ref, folder, action),
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'cover', child: Text('Change cover')),
+                PopupMenuItem(value: 'edit', child: Text('Rename')),
+                PopupMenuItem(value: 'delete', child: Text('Delete')),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
   }
+
+  String _subtitle(FolderContents? contents) {
+    if (contents == null) return '';
+
+    final count = contents.tracks.length;
+    final missing = contents.unavailablePaths.length;
+    return '$count ${count == 1 ? 'song' : 'songs'}'
+        '${missing == 0 ? '' : '  ·  $missing not found'}';
+  }
 }
 
-/// Shared by the system-folder rows and the folder cards, so rename/delete
-/// behave identically in both places.
+/// Shared by the system rows and the playlist rows, so rename, cover and
+/// delete behave identically wherever they are reached from.
 Future<void> handleFolderAction(
   BuildContext context,
   WidgetRef ref,
   FolderModel folder,
   String action,
 ) async {
+  if (action == 'cover') {
+    await _pickCover(context, ref, folder);
+    return;
+  }
+
   if (action == 'edit') {
-    final result = await promptForFolder(
+    final name = await promptForFolder(
       context,
       initialName: folder.name,
-      initialColor: folder.colorValue,
-      title: 'Edit folder',
+      title: 'Rename playlist',
     );
-    if (result != null) {
-      await ref.read(folderActionsProvider).editFolder(
-            folder.id,
-            result.name,
-            colorValue: result.colorValue,
-            setColor: true,
-          );
+    if (name != null) {
+      await ref.read(folderActionsProvider).editFolder(folder.id, name);
     }
     return;
   }
@@ -336,7 +347,7 @@ Future<void> handleFolderAction(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Delete folder?'),
+      title: const Text('Delete playlist?'),
       content: Text('This only removes "${folder.name}" — your audio files are not affected.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -346,5 +357,68 @@ Future<void> handleFolderAction(
   );
   if (confirmed == true) {
     await ref.read(folderActionsProvider).deleteFolder(folder.id);
+  }
+}
+
+/// Lets the user pick a playlist cover from the device gallery.
+///
+/// The picked file is **copied** into the app's own directory rather than
+/// referenced where it sits. The picker hands back a path in a cache the system
+/// is free to clear, and the original can be deleted from the gallery at any
+/// time; either would leave the playlist with a cover that worked until it
+/// suddenly did not.
+Future<void> _pickCover(BuildContext context, WidgetRef ref, FolderModel folder) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final actions = ref.read(folderActionsProvider);
+
+  if (folder.coverPath != null) {
+    final keep = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Playlist cover'),
+        content: const Text('Choose a new picture, or go back to using the artwork of the tracks inside.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Use track artwork'),
+          ),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Choose picture')),
+        ],
+      ),
+    );
+    if (keep == null) return;
+    if (!keep) {
+      await actions.setCover(folder.id, null);
+      return;
+    }
+  }
+
+  try {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (picked == null) return;
+
+    final directory = Directory(p.join((await getApplicationDocumentsDirectory()).path, 'playlist_covers'));
+    if (!await directory.exists()) await directory.create(recursive: true);
+
+    // Named for the playlist and stamped, so replacing a cover never has to
+    // overwrite a file that something on screen is still painting.
+    final target = p.join(
+      directory.path,
+      '${folder.id}-${DateTime.now().millisecondsSinceEpoch}${p.extension(picked.path)}',
+    );
+    await File(picked.path).copy(target);
+
+    final previous = folder.coverPath;
+    await actions.setCover(folder.id, target);
+    if (previous != null) {
+      try {
+        final old = File(previous);
+        if (old.existsSync()) await old.delete();
+      } catch (_) {
+        // A leftover file is not worth telling anyone about.
+      }
+    }
+  } catch (error) {
+    messenger.showSnackBar(SnackBar(content: Text("Couldn't set that picture: $error")));
   }
 }

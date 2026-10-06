@@ -80,6 +80,15 @@ class FolderRepository {
     await _folders.delete(id);
   }
 
+  /// Points a playlist at a picture of its own, or back at its tracks' artwork
+  /// when [coverPath] is null.
+  Future<void> setCover(String folderId, String? coverPath) async {
+    final folder = _folders.get(folderId);
+    if (folder == null) return;
+    folder.coverPath = coverPath;
+    await folder.save();
+  }
+
   Future<void> setSortMode(String folderId, String sortMode) async {
     final folder = _folders.get(folderId);
     if (folder == null) return;
@@ -200,6 +209,7 @@ class FolderRepository {
             isSystem: folder.isSystem,
             sortMode: folder.sortMode,
             colorValue: folder.colorValue,
+            coverPath: folder.coverPath,
             trackPaths: getTrackPaths(folder.id),
           ),
       ],
@@ -234,6 +244,7 @@ class FolderRepository {
             isSystem: entry.isSystem,
             sortMode: entry.sortMode,
             colorValue: entry.colorValue,
+            coverPath: entry.coverPath,
           ),
         );
         foldersCreated++;

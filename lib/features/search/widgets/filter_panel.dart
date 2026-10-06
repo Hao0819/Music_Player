@@ -84,28 +84,47 @@ class _FilterPanel extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              Text('Organization', style: theme.textTheme.titleSmall),
+              Text('Playlists', style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
-              SegmentedButton<CategorizedFilter>(
-                segments: const [
-                  ButtonSegment(value: CategorizedFilter.any, label: Text('Any')),
-                  ButtonSegment(value: CategorizedFilter.categorized, label: Text('In a folder')),
-                  ButtonSegment(value: CategorizedFilter.uncategorized, label: Text('Unfiled')),
+              // Chips, not a SegmentedButton. This is where the Library's
+              // three standalone chips moved to, and they had to look like the
+              // filters they always were rather than like a third control.
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final option in const [
+                    (CategorizedFilter.any, 'All'),
+                    (CategorizedFilter.categorized, 'In a playlist'),
+                    (CategorizedFilter.uncategorized, 'Not in a playlist'),
+                  ])
+                    ChoiceChip(
+                      label: Text(option.$2),
+                      selected: filter.categorized == option.$1,
+                      showCheckmark: false,
+                      onSelected: (_) => notifier.setCategorized(option.$1),
+                    ),
                 ],
-                selected: {filter.categorized},
-                onSelectionChanged: (selection) => notifier.setCategorized(selection.first),
               ),
               const SizedBox(height: 20),
               Text('Recent', style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
-              SegmentedButton<RecencyFilter>(
-                segments: const [
-                  ButtonSegment(value: RecencyFilter.any, label: Text('Any')),
-                  ButtonSegment(value: RecencyFilter.recentlyAdded, label: Text('Added')),
-                  ButtonSegment(value: RecencyFilter.recentlyPlayed, label: Text('Played')),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final option in const [
+                    (RecencyFilter.any, 'Any'),
+                    (RecencyFilter.recentlyAdded, 'Added'),
+                    (RecencyFilter.recentlyPlayed, 'Played'),
+                  ])
+                    ChoiceChip(
+                      label: Text(option.$2),
+                      selected: filter.recency == option.$1,
+                      showCheckmark: false,
+                      onSelected: (_) => notifier.setRecency(option.$1),
+                    ),
                 ],
-                selected: {filter.recency},
-                onSelectionChanged: (selection) => notifier.setRecency(selection.first),
               ),
               const SizedBox(height: 8),
               Text(

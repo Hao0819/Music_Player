@@ -14,9 +14,13 @@ import '../providers/player_providers.dart';
 /// "this is the track you are on, and it is running". The static `graphic_eq`
 /// glyph it replaces implied the former but looked like the latter.
 class PlayingIndicator extends ConsumerStatefulWidget {
-  const PlayingIndicator({super.key, this.size = 16});
+  const PlayingIndicator({super.key, this.size = 16, this.color});
 
   final double size;
+
+  /// Defaults to the scheme's emphasis ink. Passed explicitly where the meter
+  /// sits on something that is not a theme surface — over album art, say.
+  final Color? color;
 
   @override
   ConsumerState<PlayingIndicator> createState() => _PlayingIndicatorState();
@@ -37,7 +41,7 @@ class _PlayingIndicatorState extends ConsumerState<PlayingIndicator>
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+    final color = widget.color ?? Theme.of(context).colorScheme.primary;
     final playing = ref.watch(playbackStateProvider).value?.playing ?? false;
     // Honour the system's reduce-motion setting: the bars still show which
     // row is current, they just hold still.

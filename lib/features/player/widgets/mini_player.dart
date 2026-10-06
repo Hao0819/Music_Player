@@ -3,15 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/duration_format.dart';
 import '../../../widgets/artwork_image.dart';
 import '../../library/providers/library_providers.dart';
-import '../providers/artwork_theme_provider.dart';
 import '../providers/player_providers.dart';
 import '../screens/now_playing_screen.dart';
-import 'artwork_theme.dart';
 
-/// Rounded card floating above the bottom navigation. Renders nothing until
-/// something is actually playing.
+/// A single line across the bottom of the screen, with the position drawn as a
+/// hairline along its top edge. Renders nothing until something is playing.
+///
+/// Flush rather than a floating rounded card: the card had a shadow, a radius
+/// and a gap on three sides, which made the most persistent element in the app
+/// also one of the loudest. Flush, it reads as part of the frame, and the
+/// progress hairline doubles as the rule that separates it from the list.
 class MiniPlayer extends ConsumerWidget {
   const MiniPlayer({super.key, this.isBottomMost = false});
 
@@ -32,11 +36,9 @@ class MiniPlayer extends ConsumerWidget {
     // does not override ==, so this is unique per route instance.
     final heroTag = ('mini-player-artwork', ModalRoute.of(context));
 
-    // Only the bar is re-themed, not the screen behind it: a library list
-    // that changed colour on every track change would be unreadable.
-    final bar = ArtworkTheme(child: _Bar(item: item, heroTag: heroTag));
-    // The card floats, so nothing is painted behind the gesture area — only
-    // the inset needs to grow when the bar is the bottom-most thing.
+    final bar = _Bar(item: item, heroTag: heroTag);
+    // The bar paints its own background to the edge, so SafeArea only has to
+    // keep the controls out of Android's gesture strip.
     return isBottomMost ? SafeArea(top: false, child: bar) : bar;
   }
 }
@@ -59,87 +61,93 @@ class _Bar extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final controller = ref.read(playerControllerProvider);
-    final accent = ref.watch(currentAccentSeedProvider) ?? AppTheme.signal;
+
+    // The card inverts: near-black on a paper screen, white on an ink one. It
+    // is the one element that has to stay findable while the list scrolls
+    // under it, and with no accent colour in the palette, flipping the
+    // greyscale is the strongest move available.
+    final card = scheme.onSurface;
+    final onCard = scheme.surface;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          color: scheme.surfaceContainerHighest,
-          boxShadow: [
-            BoxShadow(
-              color: scheme.primary.withValues(alpha: 0.18),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-            onTap: () => Navigator.of(context).push(nowPlayingRoute(heroTag: heroTag)),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 12, 6),
-                  child: Row(
-                    children: [
-                      Hero(
-                        tag: heroTag,
-                        child: _MiniArtwork(mediaItemId: item.id),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              item.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleSmall,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Material(
+        color: card,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => Navigator.of(context).push(nowPlayingRoute(heroTag: heroTag)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                child: Row(
+                  children: [
+                    Hero(tag: heroTag, child: _MiniArtwork(mediaItemId: item.id)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: onCard,
+                              fontWeight: FontWeight.w600,
                             ),
-                            Text(
-                              item.artist ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${formatDuration(position)} / ${formatDuration(duration)}'
+                            '${item.artist == null || item.artist!.isEmpty ? '' : '  ·  ${item.artist}'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: onCard.withValues(alpha: 0.62),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      _GradientPlayButton(
-                        playing: playing,
-                        accent: accent,
-                        onTap: controller.togglePlayPause,
-                      ),
-                      IconButton(
-                        tooltip: 'Next',
-                        icon: const Icon(Icons.skip_next_rounded),
-                        onPressed: controller.next,
-                      ),
-                    ],
-                  ),
-                ),
-                // Progress lives at the bottom edge of the card, inset so it
-                // follows the rounded corners instead of being clipped by them.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 3,
-                      backgroundColor: scheme.onSurface.withValues(alpha: 0.10),
                     ),
-                  ),
+                    IconButton(
+                      tooltip: 'Previous',
+                      icon: const Icon(Icons.skip_previous_rounded),
+                      color: onCard.withValues(alpha: 0.75),
+                      onPressed: controller.previous,
+                    ),
+                    _PlayButton(
+                      playing: playing,
+                      background: onCard,
+                      foreground: card,
+                      onTap: controller.togglePlayPause,
+                    ),
+                    IconButton(
+                      tooltip: 'Next',
+                      icon: const Icon(Icons.skip_next_rounded),
+                      color: onCard.withValues(alpha: 0.75),
+                      onPressed: controller.next,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              // A hairline along the bottom edge of the card, inside the
+              // rounding. The reference has no progress here at all; this is
+              // two pixels of it, which is enough to glance at and not enough
+              // to add a row.
+              SizedBox(
+                height: 2,
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 2,
+                  color: onCard,
+                  backgroundColor: onCard.withValues(alpha: 0.22),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -147,38 +155,39 @@ class _Bar extends ConsumerWidget {
   }
 }
 
-/// The mini player's only bright element, matching the big button on the
-/// Now Playing screen so the two read as the same control — including its
-/// colour, which both take from the playing track's artwork.
-class _GradientPlayButton extends StatelessWidget {
-  const _GradientPlayButton({
+/// Matches the big button on Now Playing so the two read as the same control.
+///
+/// Both are now drawn in plain greys rather than from the artwork: with a
+/// monochrome palette, a disc that takes its colour from the current cover is
+/// the only coloured thing on the screen, and it looked like a mistake.
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({
     required this.playing,
-    required this.accent,
+    required this.background,
+    required this.foreground,
     required this.onTap,
   });
 
   final bool playing;
-  final Color accent;
+  final Color background;
+  final Color foreground;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: AppTheme.accentGradient(accent),
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: background),
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: SizedBox(
-            width: 40,
-            height: 40,
+            width: 42,
+            height: 42,
             child: Icon(
               playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              color: AppTheme.onAccent(accent),
+              color: foreground,
               size: 24,
             ),
           ),
@@ -198,6 +207,6 @@ class _MiniArtwork extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final track = ref.watch(trackByPathProvider(mediaItemId));
-    return ArtworkImage(trackId: track?.id, size: 48, borderRadius: 14, iconSize: 22);
+    return ArtworkImage(trackId: track?.id, size: 44, borderRadius: 10, iconSize: 18);
   }
 }

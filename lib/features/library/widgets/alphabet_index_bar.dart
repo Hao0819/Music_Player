@@ -87,7 +87,7 @@ class _AlphabetIndexBarState extends State<AlphabetIndexBar> {
                             letter,
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 9,
                               height: 1,
                               fontWeight:
                                   letter == active ? FontWeight.w700 : FontWeight.w500,

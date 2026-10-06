@@ -5,6 +5,15 @@ import '../../../domain/track.dart';
 import '../../../widgets/artwork_image.dart';
 import '../../player/widgets/playing_indicator.dart';
 
+/// One track: cover, title, and a metadata line under it.
+///
+/// The playing row says so by sitting on a raised rounded block with a level
+/// meter over its cover — not by turning a colour. There is no accent hue in
+/// this palette at all, so state is drawn with contrast and shape, which is
+/// also what keeps a list of a thousand rows from looking lit up.
+///
+/// What the row does not do is let a title's leading `[4K 60fps]` tag push the
+/// name of the song off the end: that goes to the metadata line instead.
 class TrackTile extends StatelessWidget {
   const TrackTile({
     super.key,
@@ -20,12 +29,16 @@ class TrackTile extends StatelessWidget {
     this.isCurrent = false,
   });
 
+  /// Every row is this tall, in every list.
+  ///
+  /// Fixed rather than intrinsic because the Library's A-Z index jumps
+  /// straight to `index * height` without measuring anything.
+  static const height = 68.0;
+
   /// Marks the row as the track the player is on, so it stands out in a list.
   final bool isCurrent;
 
-  /// User folders this track is filed in. Shown ahead of the artist so they
-  /// survive truncation, while keeping the row at its usual fixed height
-  /// (the Library's A–Z index relies on that).
+  /// User folders this track is filed in, named on the metadata line.
   final List<String> folderNames;
 
   final Track track;
@@ -41,96 +54,150 @@ class TrackTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final raised = isCurrent || selected;
 
-    return ListTile(
-      leading: selectionMode
-          ? CircleAvatar(
-              backgroundColor: selected ? scheme.primary : scheme.surfaceContainerHighest,
-              child: Icon(
-                selected ? Icons.check : Icons.music_note,
-                color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
+    return SizedBox(
+      height: height,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
+        child: Material(
+          // The raised block is the whole marker. It is inset from the screen
+          // edge so the rounding is visible, which is what makes it read as a
+          // block rather than as a stripe of lighter background.
+          color: raised ? scheme.surfaceContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  if (selectionMode)
+                    _SelectionBox(selected: selected)
+                  else
+                    _Cover(trackId: track.id, isCurrent: isCurrent),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          track.displayTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        // Two parts, not one string: these artists are often a
+                        // whole YouTube channel name, and as one ellipsised
+                        // line that ate the duration every time.
+                        DefaultTextStyle(
+                          style: theme.textTheme.bodySmall!.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            height: 1.2,
+                          ),
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(_lead(), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                              Text('  ·  ${formatDuration(track.duration)}'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  trailing ??
+                      (onFavoriteToggle == null
+                          ? const SizedBox(width: 4)
+                          : IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
+                              icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, size: 19),
+                              color: isFavorite ? scheme.onSurface : scheme.outline,
+                              onPressed: onFavoriteToggle,
+                            )),
+                ],
               ),
-            )
-          : ArtworkImage(trackId: track.id, size: 50),
-      title: Row(
-        children: [
-          if (isCurrent)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: PlayingIndicator(),
-            ),
-          Expanded(
-            child: Text(
-              track.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: isCurrent ? TextStyle(color: scheme.primary, fontWeight: FontWeight.w700) : null,
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// The part of the metadata line that may be truncated: the artist, and any
+  /// folders the track is filed in. The duration is appended separately so it
+  /// always survives.
+  ///
+  /// The title's leading tag is deliberately not repeated here. It is already
+  /// off the title, which was the point, and on a row this size it was the
+  /// third thing competing for a line that only reads well with two.
+  String _lead() => [track.artist, ...folderNames].join('  ·  ');
+}
+
+/// The cover, with a level meter over it while this is the playing track.
+class _Cover extends StatelessWidget {
+  const _Cover({required this.trackId, required this.isCurrent});
+
+  final int trackId;
+  final bool isCurrent;
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = ArtworkImage(trackId: trackId, size: 48, borderRadius: 8, iconSize: 20);
+    if (!isCurrent) return cover;
+
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          cover,
+          // Dimmed, because the meter has to stay legible over artwork that
+          // might be anything from a black silhouette to a white sleeve.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.black.withValues(alpha: 0.55),
+            ),
+          ),
+          const Center(child: PlayingIndicator(color: Colors.white)),
         ],
       ),
-      // Artist and album are separated by a real tonal step, not just a gap.
-      // Spacing alone was tried and does not survive contact with real data:
-      // these fields routinely contain spaces of their own ("HK Fans Club"),
-      // so without a contrast break the two run together into one phrase.
-      subtitle: Text.rich(
-        TextSpan(
-          children: [
-            if (folderNames.isNotEmpty) ...[
-              WidgetSpan(
-                alignment: PlaceholderAlignment.middle,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 3),
-                  child: Icon(Icons.folder, size: 14, color: scheme.primary),
-                ),
-              ),
-              TextSpan(
-                text: folderNames.join(', '),
-                style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
-              ),
-              _gap,
-              TextSpan(
-                text: track.artist,
-                style: TextStyle(color: scheme.onSurface.withValues(alpha: 0.80)),
-              ),
-            ] else ...[
-              TextSpan(
-                text: track.artist,
-                style: TextStyle(color: scheme.onSurface.withValues(alpha: 0.80)),
-              ),
-              _gap,
-              TextSpan(
-                text: track.album,
-                style: TextStyle(color: scheme.onSurfaceVariant.withValues(alpha: 0.62)),
-              ),
-            ],
-          ],
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: trailing ??
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (onFavoriteToggle != null)
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
-                  icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, size: 20),
-                  color: isFavorite ? scheme.primary : scheme.onSurfaceVariant,
-                  onPressed: onFavoriteToggle,
-                ),
-              Text(formatDuration(track.duration), style: theme.textTheme.labelSmall),
-            ],
-          ),
-      selected: selected,
-      onTap: onTap,
-      onLongPress: onLongPress,
     );
   }
 }
 
-/// Wide enough to be unmistakably a field break rather than a word space,
-/// which matters because the fields on either side contain word spaces.
-const _gap = WidgetSpan(child: SizedBox(width: 13));
+class _SelectionBox extends StatelessWidget {
+  const _SelectionBox({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: selected ? scheme.onSurface : scheme.surfaceContainerHigh,
+      ),
+      child: Icon(
+        selected ? Icons.check : Icons.music_note,
+        size: 20,
+        color: selected ? scheme.surface : scheme.onSurfaceVariant,
+      ),
+    );
+  }
+}

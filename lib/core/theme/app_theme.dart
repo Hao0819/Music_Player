@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
 /// One design language across light and dark, built on a single idea: **the
@@ -16,140 +14,39 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  /// Fallback accent, used until a track's artwork supplies one, and the
-  /// colour the app's own chrome is built from.
-  static const signal = Color(0xFF32A4A8);
-
-  /// The gradient for play buttons and pills, built from the sampled accent
-  /// itself rather than from `scheme.primary`.
+  /// The one colour in this app that means something: what is playing, what is
+  /// selected, and the single primary action on a screen. Nothing decorative
+  /// gets it — that restraint is the whole reason it reads as a signal.
   ///
-  /// Material 3 puts `primary` at a light tone in dark mode, which turns the
-  /// main transport control into a pale pill with a dark glyph — correct by
-  /// the spec, and a clear downgrade for the one button the whole screen is
-  /// built around. [ArtworkPalette.toSeed] already clamps lightness to a mid
-  /// band, so taking the accent directly keeps the button a solid, saturated
-  /// chip with a light glyph in both modes.
-  /// Hues that look muddy as a gradient's far end — the olive/chartreuse band
-  /// between yellow and green.
-  static const _mustyBand = (start: 55.0, end: 95.0);
-
-  static bool _inMustyBand(double hue) => hue >= _mustyBand.start && hue <= _mustyBand.end;
-
-  static LinearGradient accentGradient(Color base) {
-    final glyph = onAccent(base);
-    final hsl = HSLColor.fromColor(base);
-
-    // Small on purpose. A wider step used to carry the accent into a
-    // neighbouring colour entirely — a teal seed came out of the far end
-    // looking blue — which reads as a different colour rather than as shading
-    // of the chosen one. At this width the hue only inflects; the chroma and
-    // lightness steps below carry the gradient.
-    //
-    // The step also turns back on itself rather than crossing the olive band,
-    // unless the base already sits inside it and there is nowhere better to
-    // go: on a gold like #D9A227 a forward step lands in chartreuse, and the
-    // folder card came out visibly muddier than the swatch that made it.
-    const step = 12.0;
-    final forward = (hsl.hue + step) % 360;
-    final hue = _inMustyBand(forward) && !_inMustyBand(hsl.hue)
-        ? (hsl.hue - step + 360) % 360
-        : forward;
-
-    // With the hue barely moving, depth is what makes this read as a gradient
-    // at all. It steps away from the glyph's own lightness rather than toward
-    // it, so the far end stays the legible one; `_ensureContrast` below is
-    // only the backstop for hues where that is not enough.
-    final awayFromGlyph = glyph.computeLuminance() > 0.5 ? -0.06 : 0.06;
-
-    final far = hsl
-        .withHue(hue)
-        .withSaturation((hsl.saturation * 1.18).clamp(0.0, 1.0))
-        .withLightness((hsl.lightness + awayFromGlyph).clamp(0.0, 1.0))
-        .toColor();
-
-    return LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [base, _ensureContrast(far, glyph)],
-    );
-  }
-
-  /// Glyph colour for anything painted on [accentGradient] — whichever of
-  /// light or dark actually measures better, rather than a luminance
-  /// threshold. A mid-lightness yellow needs a dark glyph; a mid-lightness
-  /// blue needs a light one, and both sit in the band the sampler produces.
-  static Color onAccent(Color base) {
-    const dark = Color(0xFF101114);
-    return _contrast(base, Colors.white) >= _contrast(base, dark) ? Colors.white : dark;
-  }
-
-  /// Darkens or lightens [color] until [glyph] is legible on it.
+  /// It is also the accent the chrome is built from, and the fallback until a
+  /// track's artwork supplies one of its own.
   ///
-  /// HSL lightness is not perceived brightness: rotating a red toward orange
-  /// raises luminance sharply at the same lightness, which is exactly how the
-  /// white glyph once landed at 2.5:1 on the far stop. Stepping until the
-  /// ratio actually measures is the only version of this that holds for every
-  /// hue a cover might produce.
-  static Color _ensureContrast(Color color, Color glyph, {double target = 3.2}) {
-    final towardDark = glyph.computeLuminance() > 0.5;
-    var hsl = HSLColor.fromColor(color);
-    var result = color;
-
-    for (var i = 0; i < 40 && _contrast(result, glyph) < target; i++) {
-      final next = (hsl.lightness + (towardDark ? -0.02 : 0.02)).clamp(0.0, 1.0);
-      if (next == hsl.lightness) break; // Hit black or white; nothing more to give.
-      hsl = hsl.withLightness(next);
-      result = hsl.toColor();
-    }
-    return result;
-  }
-
-  static double _contrast(Color a, Color b) {
-    final la = _relativeLuminance(a);
-    final lb = _relativeLuminance(b);
-    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05);
-  }
-
-  static double _relativeLuminance(Color c) {
-    double channel(double v) => v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4).toDouble();
-    return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b);
-  }
-
-  /// The colours offered when picking a folder's colour.
+  /// Emphasis is **ink, not colour**: the far end of the greyscale from
+  /// whatever it is drawn on.
   ///
-  /// Ten hues walked round the wheel at a matched lightness and chroma, so no
-  /// one swatch jumps out of the set. They sit in the same mid band
-  /// [ArtworkPalette.toSeed] targets, which is what lets [accentGradient] and
-  /// [onAccent] treat them exactly like a sampled cover colour.
-  static const folderPalette = <Color>[
-    Color(0xFF3B6FF2), // blue
-    Color(0xFF1BBDB6), // teal
-    Color(0xFF31B36A), // green
-    Color(0xFF7CB342), // lime
-    Color(0xFFD9A227), // amber
-    Color(0xFFE0743A), // orange
-    Color(0xFFDC4F5C), // red
-    Color(0xFFD14A8E), // pink
-    Color(0xFF8E57D6), // violet
-    // The one low-chroma option. Its hue sits near blue's, but at a sixth of
-    // the saturation it reads as grey, not as a second blue.
-    Color(0xFF64748B), // slate
-  ];
+  /// So the primary button is black-on-paper in light mode and white-on-ink in
+  /// dark mode, and it inverts rather than tinting. This replaced an accent
+  /// colour — first a chartreuse, then a green — and both had the same
+  /// problem: once a hue exists, every selected thing wants to wear it, and
+  /// the screen ends up highlighted rather than ordered. With no hue in the
+  /// palette at all, contrast is the only tool left, which is what makes the
+  /// hierarchy read.
+  ///
+  /// Hue survives in exactly two places, both of them content rather than
+  /// chrome: a folder's own colour, which the user picks, and album art.
+  static const signalDark = Color(0xFFFFFFFF);
+  static const signalLight = Color(0xFF121212);
 
-  /// A folder's base colour: the one that was picked, or failing that one
-  /// derived from its name so a folder still arrives with some identity.
-  static Color folderColor(String name, int? chosen) {
-    if (chosen != null) return Color(chosen);
-    return folderPalette[name.hashCode.abs() % folderPalette.length];
-  }
+  static Color signalFor(Brightness brightness) =>
+      brightness == Brightness.dark ? signalDark : signalLight;
 
-  /// The gradient painted on a folder card, from that base colour.
-  static LinearGradient folderGradient(String name, int? chosen) =>
-      accentGradient(folderColor(name, chosen));
+  // The folder palette, folderColor, folderInk and folderGradient all lived
+  // here. They are gone: the app draws in black and white only, so a folder
+  // has no colour to be assigned and nothing to tint. A playlist is told apart
+  // by its cover, which is the one place an image's own colour belongs.
 
-  /// Shared corner radii, so tiles, sheets and artwork agree.
-  static const radiusSmall = 10.0;
-  static const radiusMedium = 16.0;
+  static const radiusSmall = 12.0;
+  static const radiusMedium = 20.0;
   static const radiusLarge = 24.0;
 
   /// The display family. Only the Now Playing title uses it — the design
@@ -205,6 +102,60 @@ class AppTheme {
   /// to re-run with an artwork-derived scheme.
   static ColorScheme neutralize(ColorScheme scheme) {
     final isDark = scheme.brightness == Brightness.dark;
+
+    // Every accent family, pinned flat. Material derives primaryContainer,
+    // tertiary, error and the fixed variants from the seed, and those come out
+    // coloured no matter what the seed is — which is how the three rows at the
+    // top of Playlists kept a tinted icon tile long after the palette was
+    // supposed to be gone. Anything left to Material is a colour waiting to
+    // appear in a corner nobody looked at.
+    final ink = isDark ? const Color(0xFFFFFFFF) : const Color(0xFF121212);
+    final ground = isDark ? const Color(0xFF121212) : const Color(0xFFFFFFFF);
+    final container = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE7E7E7);
+    final onContainer = isDark ? const Color(0xFFFFFFFF) : const Color(0xFF121212);
+
+    scheme = scheme.copyWith(
+      primary: ink,
+      onPrimary: ground,
+      primaryContainer: container,
+      onPrimaryContainer: onContainer,
+      primaryFixed: container,
+      primaryFixedDim: container,
+      onPrimaryFixed: onContainer,
+      onPrimaryFixedVariant: onContainer,
+      secondary: ink,
+      onSecondary: ground,
+      secondaryContainer: container,
+      onSecondaryContainer: onContainer,
+      secondaryFixed: container,
+      secondaryFixedDim: container,
+      onSecondaryFixed: onContainer,
+      onSecondaryFixedVariant: onContainer,
+      tertiary: ink,
+      onTertiary: ground,
+      tertiaryContainer: container,
+      onTertiaryContainer: onContainer,
+      tertiaryFixed: container,
+      tertiaryFixedDim: container,
+      onTertiaryFixed: onContainer,
+      onTertiaryFixedVariant: onContainer,
+      // Errors included. A red would be the one hue left in the app, and this
+      // app's errors are sentences — "3 tracks can't be found" — that say what
+      // is wrong without needing a colour to carry it.
+      error: ink,
+      onError: ground,
+      errorContainer: container,
+      onErrorContainer: onContainer,
+      inverseSurface: ink,
+      onInverseSurface: ground,
+      inversePrimary: ground,
+      // The two surfaces Material derives rather than taking from the ladder.
+      surfaceDim: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFDEDEDE),
+      surfaceBright: isDark ? const Color(0xFF333333) : const Color(0xFFFFFFFF),
+      shadow: const Color(0xFF000000),
+      scrim: const Color(0xFF000000),
+    );
+
     if (isDark) {
       return scheme.copyWith(
         // Material 3 tints raised and scrolled-under surfaces with `primary`.
@@ -212,31 +163,35 @@ class AppTheme {
         // back a pale blue-violet — so the tint is pinned to the surface it
         // sits on, which is the supported way to switch it off everywhere at
         // once rather than per component.
-        surfaceTint: const Color(0xFF0E0F11),
-        surface: const Color(0xFF0E0F11),
-        surfaceContainerLowest: const Color(0xFF0A0B0C),
-        surfaceContainerLow: const Color(0xFF141619),
-        surfaceContainer: const Color(0xFF181A1D),
-        surfaceContainerHigh: const Color(0xFF1E2124),
-        surfaceContainerHighest: const Color(0xFF26292D),
-        onSurface: const Color(0xFFE7E8EA),
-        onSurfaceVariant: const Color(0xFFA8ACB2),
-        outline: const Color(0xFF52575D),
-        outlineVariant: const Color(0xFF2E3236),
+        // Dead neutral: every channel equal, at every step. The reference this
+        // is drawn from uses a faintly blue black, and an earlier pass copied
+        // it — but "black and white only" means the ground has no hue either,
+        // and on a real screen the difference is a few values out of 255.
+        surfaceTint: const Color(0xFF121212),
+        surface: const Color(0xFF121212),
+        surfaceContainerLowest: const Color(0xFF000000),
+        surfaceContainerLow: const Color(0xFF1A1A1A),
+        surfaceContainer: const Color(0xFF212121),
+        surfaceContainerHigh: const Color(0xFF2A2A2A),
+        surfaceContainerHighest: const Color(0xFF333333),
+        onSurface: const Color(0xFFFFFFFF),
+        onSurfaceVariant: const Color(0xFFA0A0A0),
+        outline: const Color(0xFF6E6E6E),
+        outlineVariant: const Color(0xFF2E2E2E),
       );
     }
     return scheme.copyWith(
-      surfaceTint: const Color(0xFFF7F7F8),
-      surface: const Color(0xFFF7F7F8),
+      surfaceTint: const Color(0xFFF8F8F8),
+      surface: const Color(0xFFF8F8F8),
       surfaceContainerLowest: const Color(0xFFFFFFFF),
       surfaceContainerLow: const Color(0xFFFFFFFF),
-      surfaceContainer: const Color(0xFFF1F2F3),
-      surfaceContainerHigh: const Color(0xFFEAEBED),
-      surfaceContainerHighest: const Color(0xFFE3E5E7),
-      onSurface: const Color(0xFF15171A),
-      onSurfaceVariant: const Color(0xFF5C6167),
-      outline: const Color(0xFF8A9096),
-      outlineVariant: const Color(0xFFDEE0E3),
+      surfaceContainer: const Color(0xFFF0F0F0),
+      surfaceContainerHigh: const Color(0xFFE7E7E7),
+      surfaceContainerHighest: const Color(0xFFDEDEDE),
+      onSurface: const Color(0xFF121212),
+      onSurfaceVariant: const Color(0xFF606060),
+      outline: const Color(0xFF8E8E8E),
+      outlineVariant: const Color(0xFFE0E0E0),
     );
   }
 
@@ -302,9 +257,7 @@ class AppTheme {
     // Derived rather than written out as hex. They used to be hand-picked
     // blues, which meant they kept their old hue when the seed changed and
     // left the chrome looking like the previous palette.
-    final seed = HSLColor.fromColor(signal);
-    Color tone(double lightness, double saturation) =>
-        seed.withLightness(lightness).withSaturation(saturation).toColor();
+    final signal = signalFor(brightness);
 
     final scheme = neutralize(
       ColorScheme.fromSeed(
@@ -312,9 +265,16 @@ class AppTheme {
         brightness: brightness,
         dynamicSchemeVariant: DynamicSchemeVariant.vibrant,
       ).copyWith(
-        secondary: isDark ? tone(0.72, 0.60) : tone(0.32, 0.70),
-        secondaryContainer: isDark ? tone(0.20, 0.55) : tone(0.88, 0.55),
-        onSecondaryContainer: isDark ? tone(0.86, 0.50) : tone(0.16, 0.75),
+        // Emphasis is the far end of the greyscale, and what sits on it is the
+        // ground it came from. Material would otherwise derive a tinted
+        // relative of the seed for both, which is the one thing this palette
+        // does not allow.
+        primary: signal,
+        onPrimary: isDark ? const Color(0xFF121212) : const Color(0xFFFFFFFF),
+        secondary: signal,
+        onSecondary: isDark ? const Color(0xFF121212) : const Color(0xFFFFFFFF),
+        secondaryContainer: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE7E7E7),
+        onSecondaryContainer: isDark ? const Color(0xFFFFFFFF) : const Color(0xFF121212),
       ),
     );
 
@@ -348,12 +308,24 @@ class AppTheme {
 
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: scheme.surface,
-        indicatorColor: scheme.secondaryContainer,
+        // No capsule, and selection is drawn in full-strength ink rather than
+        // in the accent. The accent belongs to one thing — starting playback —
+        // and spending it on "which tab am I on" is what made every screen
+        // look highlighted.
+        indicatorColor: Colors.transparent,
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            size: 22,
+            color: states.contains(WidgetState.selected) ? scheme.onSurface : scheme.onSurfaceVariant,
+          ),
+        ),
         elevation: 0,
         height: 68,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => text.labelMedium?.copyWith(
             fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w500,
+            color: states.contains(WidgetState.selected) ? scheme.onSurface : scheme.onSurfaceVariant,
           ),
         ),
       ),
@@ -371,15 +343,23 @@ class AppTheme {
         subtitleTextStyle: text.bodySmall,
       ),
 
+      // A filled block with soft corners, not a capsule and not a bare rule.
+      // The capsule is the most recognisable Material default on a screen; the
+      // rule, which this briefly was, disappeared into the app bar and left
+      // the field looking unfinished.
       searchBarTheme: SearchBarThemeData(
         elevation: const WidgetStatePropertyAll(0),
-        backgroundColor: WidgetStatePropertyAll(scheme.surfaceContainerHigh),
-        textStyle: WidgetStatePropertyAll(text.bodyLarge),
-        hintStyle: WidgetStatePropertyAll(text.bodyLarge?.copyWith(color: scheme.onSurfaceVariant)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusLarge)),
+        backgroundColor: WidgetStatePropertyAll(scheme.surfaceContainer),
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        textStyle: WidgetStatePropertyAll(text.bodyMedium),
+        hintStyle: WidgetStatePropertyAll(
+          text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
         ),
-        side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant)),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusSmall)),
+        ),
+        side: const WidgetStatePropertyAll(BorderSide.none),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
       ),
 
       bottomSheetTheme: BottomSheetThemeData(
@@ -395,10 +375,45 @@ class AppTheme {
         contentTextStyle: text.bodyMedium,
       ),
 
+      // Filled and quiet when off, inverted when on. An outlined pill reads as
+      // a button you have not pressed yet; these are a state, and the selected
+      // one should be obvious without colour doing the work.
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusSmall)),
-        side: BorderSide(color: scheme.outlineVariant),
-        labelStyle: text.labelLarge,
+        side: BorderSide.none,
+        backgroundColor: scheme.surfaceContainerHigh,
+        selectedColor: scheme.onSurface,
+        labelStyle: text.labelLarge?.copyWith(color: scheme.onSurface),
+        secondaryLabelStyle: text.labelLarge?.copyWith(
+          color: scheme.surface,
+          fontWeight: FontWeight.w600,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        showCheckmark: false,
+      ),
+
+      // Filled, square-cornered-but-soft, and inverted when it is the primary
+      // action — the Play/Shuffle pair the reference puts above a track list.
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: scheme.onSurface,
+          foregroundColor: scheme.surface,
+          elevation: 0,
+          minimumSize: const Size(0, 48),
+          textStyle: text.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusSmall)),
+        ),
+      ),
+
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: scheme.onSurface,
+          backgroundColor: isDark ? scheme.surfaceContainerLow : Colors.transparent,
+          side: BorderSide(color: scheme.outlineVariant),
+          minimumSize: const Size(0, 48),
+          textStyle: text.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusSmall)),
+        ),
       ),
 
       sliderTheme: SliderThemeData(

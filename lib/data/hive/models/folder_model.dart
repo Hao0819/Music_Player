@@ -25,8 +25,17 @@ class FolderModel extends HiveObject {
   /// A single base colour rather than the two ends of a gradient: the second
   /// stop is derived from it, so there is one thing to store, one thing to
   /// pick, and the derivation already guarantees a legible glyph on top.
+  /// Kept so existing boxes still read, and so a backup written by an older
+  /// build round-trips. Nothing sets it any more: the app draws in black and
+  /// white, so a folder has no colour to assign.
   @HiveField(5)
   int? colorValue;
+
+  /// A picture the user chose for this playlist, copied into the app's own
+  /// directory so it survives the original being deleted from the gallery.
+  /// Null means the cover is taken from the first track that has artwork.
+  @HiveField(6)
+  String? coverPath;
 
   FolderModel({
     required this.id,
@@ -35,5 +44,6 @@ class FolderModel extends HiveObject {
     this.isSystem = false,
     this.sortMode = 'manual',
     this.colorValue,
+    this.coverPath,
   });
 }

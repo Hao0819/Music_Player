@@ -51,6 +51,8 @@ dependencies:
   path_provider: ^2.1.4
   # Used for fixed-length Hive keys; see data/hive/box_keys.dart.
   crypto: ^3.0.6
+  # Lets a playlist take its cover from a photo on the device.
+  image_picker: ^1.1.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

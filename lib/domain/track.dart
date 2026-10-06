@@ -60,6 +60,17 @@ class Track {
   final DateTime dateAdded;
   final String format;
 
+  /// The title with its leading `[...]` / `(...)` tags removed, and those tags
+  /// on their own, in the order they appeared.
+  ///
+  /// Files pulled off YouTube arrive titled `[4K 60fps] 稻香 (Live)`. The tag is
+  /// real information, but it is not the name of the song, and at the front of
+  /// a row it eats exactly the width the name needs — so a list shows
+  /// [displayTitle] and puts [tagLabel] down on the metadata line. Empty when
+  /// the title has no tags, which is most of a normal library.
+  late final String displayTitle = _splitLeadingTags(title).rest;
+  late final String tagLabel = _splitLeadingTags(title).tags;
+
   /// Sort keys, with Han characters romanised.
   ///
   /// Sorting on the raw strings ordered Chinese by UTF-16 code point, which is
@@ -117,6 +128,7 @@ class Track {
   /// discarding every key those instances had computed. Keying on the text
   /// means each distinct string is romanised once for the life of the process
   /// instead of once per row per scan.
+  static final Map<String, ({String tags, String rest})> _splitTitles = {};
   static final Map<String, String> _sortKeys = {};
   static final Map<String, String> _indexLetters = {};
 
@@ -140,8 +152,19 @@ class Track {
   /// `[4K _ 60fps] ...`. Indexing on those puts most of a library under a
   /// single letter — and under '#', since they start with punctuation — which
   /// is the same as having no index at all.
-  static String _withoutLeadingTags(String value) {
+  static String _withoutLeadingTags(String value) => _splitLeadingTags(value).rest;
+
+  /// Splits a leading run of bracketed tags off the front of [value].
+  ///
+  /// Cached because both halves are read per row and the sort keys read the
+  /// rest again; the walk is cheap but it is done for every track in the
+  /// library on every sort.
+  static ({String tags, String rest}) _splitLeadingTags(String value) {
+    final hit = _splitTitles[value];
+    if (hit != null) return hit;
+
     var rest = value.trimLeft();
+    final tags = <String>[];
 
     while (rest.isNotEmpty) {
       final close = switch (rest[0]) {
@@ -155,12 +178,21 @@ class Track {
 
       final end = rest.indexOf(close);
       if (end < 0) break;
+
+      final tag = rest.substring(1, end).trim();
+      if (tag.isNotEmpty) tags.add(tag);
       rest = rest.substring(end + 1).trimLeft();
     }
 
-    // A title that is nothing but a tag keeps its original text; dropping it
-    // entirely would leave the row with no sort position at all.
-    return rest.isEmpty ? value.trimLeft() : rest;
+    // A title that is nothing but a tag keeps its original text: dropping it
+    // entirely would leave the row with no name and no sort position at all,
+    // and then the tag is the only thing there is to call it.
+    final result = rest.isEmpty
+        ? (tags: '', rest: value.trimLeft())
+        : (tags: tags.join(' · '), rest: rest);
+
+    if (_splitTitles.length >= _maxCachedKeys) _splitTitles.remove(_splitTitles.keys.first);
+    return _splitTitles[value] = result;
   }
 
   static String _sortKey(String value) => _cached(_sortKeys, value, () => _computeSortKey(value));

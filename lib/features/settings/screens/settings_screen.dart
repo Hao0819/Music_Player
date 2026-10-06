@@ -32,18 +32,28 @@ class SettingsScreen extends ConsumerWidget {
           _SectionHeader(title: 'Appearance'),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: SegmentedButton<ThemeMode>(
-              segments: const [
-                ButtonSegment(value: ThemeMode.system, label: Text('System'), icon: Icon(Icons.brightness_auto)),
-                ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode)),
-                ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode)),
+            // The same chips the Library filters use. SegmentedButton is one
+            // of the most recognisable Material components there is, outlines
+            // and all, and three of its icons on a settings page were doing
+            // nothing the three words did not already do.
+            child: Wrap(
+              spacing: 8,
+              children: [
+                for (final mode in ThemeMode.values)
+                  ChoiceChip(
+                    label: Text(switch (mode) {
+                      ThemeMode.system => 'System',
+                      ThemeMode.light => 'Light',
+                      ThemeMode.dark => 'Dark',
+                    }),
+                    selected: themeMode == mode,
+                    showCheckmark: false,
+                    onSelected: (_) => ref.read(themeModeProvider.notifier).setThemeMode(mode),
+                  ),
               ],
-              selected: {themeMode},
-              onSelectionChanged: (selection) =>
-                  ref.read(themeModeProvider.notifier).setThemeMode(selection.first),
             ),
           ),
-          const Divider(height: 32),
+          const SizedBox(height: 28),
 
           _SectionHeader(title: 'Library'),
           ListTile(
@@ -73,21 +83,21 @@ class SettingsScreen extends ConsumerWidget {
             enabled: !stale.isEmpty,
             onTap: stale.isEmpty ? null : () => _confirmCleanup(context, ref, stale),
           ),
-          const Divider(height: 32),
+          const SizedBox(height: 28),
 
-          _SectionHeader(title: 'Folders'),
+          _SectionHeader(title: 'Playlists'),
           ListTile(
             leading: Icon(
               setAside.isEmpty ? Icons.backup_outlined : Icons.warning_amber_rounded,
               color: setAside.isEmpty ? null : theme.colorScheme.error,
             ),
-            title: const Text('Folder backup'),
+            title: const Text('Playlist backup'),
             subtitle: Text(
               setAside.isNotEmpty
                   ? 'Some saved data could not be read on this launch'
                   : switch (backups) {
-                      null => 'Export your folders, or restore them from a file',
-                      [] => 'No backup yet — your folders exist in one place only',
+                      null => 'Export your playlists, or restore them from a file',
+                      [] => 'No backup yet — your playlists exist in one place only',
                       [final latest, ...] => 'Last backup '
                           '${latest.backup == null ? latest.fileName : formatTimestamp(latest.backup!.createdAt)}',
                     },
@@ -97,7 +107,7 @@ class SettingsScreen extends ConsumerWidget {
               MaterialPageRoute<void>(builder: (_) => const FolderBackupScreen()),
             ),
           ),
-          const Divider(height: 32),
+          const SizedBox(height: 28),
 
           _SectionHeader(title: 'Download'),
           ListTile(
@@ -109,7 +119,7 @@ class SettingsScreen extends ConsumerWidget {
               MaterialPageRoute<void>(builder: (_) => const DownloadScreen()),
             ),
           ),
-          const Divider(height: 32),
+          const SizedBox(height: 28),
 
           _SectionHeader(title: 'About'),
           ListTile(
@@ -142,7 +152,7 @@ class SettingsScreen extends ConsumerWidget {
         title: const Text('Clean up missing files?'),
         content: Text(
           '${stale.missingPaths.length} audio file(s) that used to be on this device are gone.\n\n'
-          'This removes ${stale.folderLinks} folder entr${stale.folderLinks == 1 ? 'y' : 'ies'} '
+          'This removes ${stale.folderLinks} playlist entr${stale.folderLinks == 1 ? 'y' : 'ies'} '
           'and ${stale.historyEntries} history entr${stale.historyEntries == 1 ? 'y' : 'ies'} '
           'pointing at them.\n\n'
           'Your other folders, favorites and audio files are not affected.',
@@ -176,10 +186,15 @@ class _SectionHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       child: Text(
-        title,
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: theme.colorScheme.primary,
+        title.toUpperCase(),
+        // Small, grey and tracked out, the way the reference labels a block of
+        // content. It used to be the accent colour, which with the accent gone
+        // would simply be white — too loud for a label above the thing it
+        // names.
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
           fontWeight: FontWeight.w600,
+          letterSpacing: 1.4,
         ),
       ),
     );

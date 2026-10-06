@@ -58,6 +58,21 @@ class KnownTracksTickNotifier extends Notifier<int> {
 final knownTracksTickProvider =
     NotifierProvider<KnownTracksTickNotifier, int>(KnownTracksTickNotifier.new);
 
+/// True while a rescan is running.
+///
+/// Separate from the scan's own AsyncValue because [LibraryScanNotifier.refresh]
+/// deliberately does not put the provider back into a loading state — the list
+/// stays on screen while it re-queries — so there is otherwise nothing for the
+/// UI to show the work by.
+class RescanningNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool value) => state = value;
+}
+
+final libraryRescanningProvider = NotifierProvider<RescanningNotifier, bool>(RescanningNotifier.new);
+
 class LibraryScanNotifier extends AsyncNotifier<List<Track>> {
   /// The last list this notifier produced, kept so a rescan can hand back the
   /// very same [Track] objects for files that have not changed. Not read from
@@ -74,7 +89,12 @@ class LibraryScanNotifier extends AsyncNotifier<List<Track>> {
   /// Rescans without clearing the currently displayed list first, so a
   /// pull-to-refresh doesn't flash the list away while it re-queries.
   Future<void> refresh() async {
-    state = await AsyncValue.guard(_scan);
+    ref.read(libraryRescanningProvider.notifier).set(true);
+    try {
+      state = await AsyncValue.guard(_scan);
+    } finally {
+      if (ref.mounted) ref.read(libraryRescanningProvider.notifier).set(false);
+    }
   }
 
   /// Resolves as soon as the plugin's rows are ready; the broader native pass

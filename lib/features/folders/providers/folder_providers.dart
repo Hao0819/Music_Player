@@ -137,6 +137,11 @@ class FolderActions {
     _bumpLinks();
   }
 
+  Future<void> setCover(String folderId, String? coverPath) async {
+    await _repository.setCover(folderId, coverPath);
+    _ref.invalidate(folderListProvider);
+  }
+
   Future<void> setSortMode(String folderId, FolderSortMode mode) async {
     await _repository.setSortMode(folderId, mode.name);
     _ref.invalidate(folderListProvider);

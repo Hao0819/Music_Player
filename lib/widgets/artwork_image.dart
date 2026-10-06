@@ -39,10 +39,32 @@ class ArtworkImage extends ConsumerStatefulWidget {
   ConsumerState<ArtworkImage> createState() => _ArtworkImageState();
 }
 
-class _ArtworkImageState extends ConsumerState<ArtworkImage> {
-  static const _maxCacheEntries = 150;
+/// Artwork for one track, fetched once per id and kept.
+///
+/// Public and cache-backed because more than one thing needs the answer now: a
+/// row draws it, and a playlist cover has to ask several tracks in turn which
+/// of them actually has a picture. Going through the widget for that would
+/// mean building one per candidate.
+Future<Uint8List?> loadArtwork(WidgetRef ref, int id) => _ArtworkCache.load(ref, id);
+
+class _ArtworkCache {
+  static const _maxEntries = 150;
   static final Map<int, Uint8List?> _cache = {};
 
+  static bool contains(int id) => _cache.containsKey(id);
+  static Uint8List? peek(int id) => _cache[id];
+
+  static Future<Uint8List?> load(WidgetRef ref, int id) async {
+    if (_cache.containsKey(id)) return _cache[id];
+
+    final bytes = await ref.read(onAudioQueryProvider).queryArtwork(id, ArtworkType.AUDIO, size: 400);
+
+    if (_cache.length >= _maxEntries) _cache.remove(_cache.keys.first);
+    return _cache[id] = bytes;
+  }
+}
+
+class _ArtworkImageState extends ConsumerState<ArtworkImage> {
   Uint8List? _bytes;
 
   @override
@@ -64,17 +86,12 @@ class _ArtworkImageState extends ConsumerState<ArtworkImage> {
     final id = widget.trackId;
     if (id == null) return;
 
-    if (_cache.containsKey(id)) {
-      setState(() => _bytes = _cache[id]);
+    if (_ArtworkCache.contains(id)) {
+      setState(() => _bytes = _ArtworkCache.peek(id));
       return;
     }
 
-    final bytes = await ref.read(onAudioQueryProvider).queryArtwork(id, ArtworkType.AUDIO, size: 400);
-    if (_cache.length >= _maxCacheEntries) {
-      _cache.remove(_cache.keys.first);
-    }
-    _cache[id] = bytes;
-
+    final bytes = await _ArtworkCache.load(ref, id);
     if (!mounted) return;
     setState(() => _bytes = bytes);
   }
@@ -85,41 +102,20 @@ class _ArtworkImageState extends ConsumerState<ArtworkImage> {
     final bytes = _bytes;
 
     if (bytes == null || bytes.isEmpty) {
-      // Still reads as "this track has no cover" — outlined and muted, not a
-      // stand-in picture. The faint tint only keeps a screenful of them from
-      // being a wall of flat grey.
+      // The default cover: a plain record on flat grey. Not `music_off` — a
+      // struck-through note reads as "muted" or "cannot play", which is wrong
+      // for a track that plays perfectly well and only lacks a picture.
       return Container(
         width: widget.size,
         height: widget.size,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(widget.borderRadius),
-          border: Border.all(color: scheme.outlineVariant),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              // Strength comes from the caller — see [placeholderTint]. The
-              // second stop is a fraction of the first so the block has some
-              // internal shape instead of being one flat fill.
-              Color.alphaBlend(
-                scheme.primary.withValues(alpha: widget.placeholderTint),
-                scheme.surfaceContainerHighest,
-              ),
-              Color.alphaBlend(
-                scheme.primary.withValues(alpha: widget.placeholderTint * 0.3),
-                scheme.surfaceContainerHighest,
-              ),
-            ],
-          ),
+          color: scheme.surfaceContainerHigh,
         ),
-        // Not `music_off`: a struck-through note means "muted" or "cannot
-        // play" to anyone reading it, which is actively wrong — and at Now
-        // Playing size it filled half the screen with a stop sign for a track
-        // that was playing fine. A plain record says "no cover" instead.
         child: Icon(
-          Icons.album_outlined,
-          size: widget.iconSize ?? widget.size * 0.4,
-          color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
+          Icons.album,
+          size: widget.iconSize ?? widget.size * 0.45,
+          color: scheme.outline,
         ),
       );
     }

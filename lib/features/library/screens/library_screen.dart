@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
 import '../../../domain/library_filter_state.dart';
 import '../../../domain/track.dart';
 import '../../../widgets/empty_state.dart';
@@ -14,9 +13,9 @@ import '../widgets/alphabet_index_bar.dart';
 import '../widgets/sort_menu_button.dart';
 import '../widgets/track_tile.dart';
 
-/// Fixed row height so the A–Z index can jump straight to an offset without
-/// measuring every tile.
-const double _trackTileExtent = 72;
+/// The row height the A–Z index jumps by, owned by the tile itself so the two
+/// cannot drift apart.
+const double _trackTileExtent = TrackTile.height;
 
 /// Heights of the chrome above the list.
 ///
@@ -29,7 +28,6 @@ const double _trackTileExtent = 72;
 /// toolbar rather than in the app bar's `bottom`, because a `bottom` survives
 /// the toolbar scrolling away and ends up drawn over the status bar.
 const double _toolbarExtent = 64;
-const double _chipsExtent = 48;
 const double _statsExtent = 48;
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -56,7 +54,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// keeps painting over the top of the viewport, so the distance the content
   /// scrolls past it is exactly the height it then covers. Only the chips and
   /// the count row actually scroll away.
-  double get _headerExtent => _chipsExtent + _statsExtent;
+  double get _headerExtent => _statsExtent;
 
   void _jumpToLetter(String letter, List<Track> tracks, LibrarySortField field) {
     if (!_scrollController.hasClients) return;
@@ -108,7 +106,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             sortField == LibrarySortField.artist ||
             sortField == LibrarySortField.album);
 
-    final indexBarInset = showIndexBar ? AlphabetIndexBar.hitWidth : 0.0;
+    // Only the width the letters actually occupy, not the whole touch target.
+    // The strip is 44dp wide so a thumb can land on the right row, but the
+    // letters are right-aligned inside it — reserving all 44 left a visible
+    // channel of nothing between the rows and the index.
+    final indexBarInset = showIndexBar ? 22.0 : 0.0;
 
     return Scaffold(
       body: Stack(
@@ -127,16 +129,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 // The rows above the list have to clear the index strip too —
                 // only the list itself was inset before, so the Shuffle pill
                 // ran underneath the letters.
-                if (!inSelectionMode)
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: _chipsExtent,
-                      child: Padding(
-                        padding: EdgeInsets.only(right: indexBarInset),
-                        child: const _FolderStatusChips(),
-                      ),
-                    ),
-                  ),
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: _statsExtent,
@@ -232,13 +224,28 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       titleSpacing: 16,
       // No "Library" heading: the navigation bar already says which tab this
       // is, and the row is worth more as the search field.
+      // The rule under the toolbar doubles as the scan indicator, so a rescan
+      // is visible without the list flashing away or a dialog appearing over
+      // it. Indeterminate on purpose: MediaStore answers in one go, so there
+      // is no honest count to show part-way through.
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(2),
+        child: SizedBox(
+          height: 2,
+          child: ref.watch(libraryRescanningProvider)
+              ? LinearProgressIndicator(
+                  minHeight: 2,
+                  backgroundColor: Theme.of(context).colorScheme.outlineVariant,
+                )
+              : ColoredBox(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+      ),
       title: SizedBox(
-        height: 48,
+        height: 44,
         child: SearchBar(
           controller: _searchController,
           hintText: 'Search your library',
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
-          leading: const Icon(Icons.search, size: 20),
+          leading: const Icon(Icons.search, size: 19),
           trailing: [
             if (query.isNotEmpty)
               IconButton(
@@ -303,42 +310,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 }
 
-/// One-tap version of the filter panel's "Organization" setting — the same
-/// state, so the two always agree.
-class _FolderStatusChips extends ConsumerWidget {
-  const _FolderStatusChips();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final current = ref.watch(libraryFilterProvider).categorized;
-    final notifier = ref.read(libraryFilterProvider.notifier);
-
-    Widget chip(CategorizedFilter value, String label, IconData icon) {
-      return ChoiceChip(
-        avatar: Icon(icon, size: 18),
-        label: Text(label),
-        selected: current == value,
-        showCheckmark: false,
-        visualDensity: VisualDensity.compact,
-        onSelected: (_) => notifier.setCategorized(value),
-      );
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: Row(
-        children: [
-          chip(CategorizedFilter.any, 'All', Icons.library_music_outlined),
-          const SizedBox(width: 8),
-          chip(CategorizedFilter.categorized, 'In a folder', Icons.folder_outlined),
-          const SizedBox(width: 8),
-          chip(CategorizedFilter.uncategorized, 'Not in a folder', Icons.folder_off_outlined),
-        ],
-      ),
-    );
-  }
-}
+// The three standalone folder chips lived here. They are filters, and there was
+// already a Filters panel with the same three options in it — two controls for
+// one setting, one of them taking a whole row above the list.
 
 /// How many tracks are in view, and the fastest way into playing them.
 ///
@@ -376,32 +350,32 @@ class _LibraryStats extends ConsumerWidget {
           // playback from a long list. Deliberately the app's own accent
           // rather than the playing track's — the library is not re-themed
           // per track, or a long list would change colour under you.
-          DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-              gradient: AppTheme.accentGradient(AppTheme.signal),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                onTap: () => ref.read(playerControllerProvider).shufflePlay(
-                      ref.read(visibleLibraryProvider).value ?? const [],
-                    ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.shuffle, size: 17, color: AppTheme.onAccent(AppTheme.signal)),
-                      const SizedBox(width: 7),
-                      Text(
-                        'Shuffle',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: AppTheme.onAccent(AppTheme.signal),
-                        ),
+          // A disc, not a filled bar. At bar width the accent covered a third
+          // of the row and became the loudest thing on the screen; at 48px it
+          // is unmistakably the button that starts the music and nothing else
+          // competes with it.
+          Tooltip(
+            message: 'Shuffle the whole library',
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.onSurface,
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => ref.read(playerControllerProvider).shufflePlay(
+                        ref.read(visibleLibraryProvider).value ?? const [],
                       ),
-                    ],
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Icon(
+                      Icons.shuffle,
+                      size: 22,
+                      color: theme.colorScheme.surface,
+                    ),
                   ),
                 ),
               ),

@@ -20,21 +20,28 @@ class SearchScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: TextField(
-          autofocus: false,
-          decoration: const InputDecoration(
+        titleSpacing: 16,
+        toolbarHeight: 68,
+        // The same filled field the Library uses, rather than a bare TextField
+        // sitting in the app bar with nothing around it.
+        title: SizedBox(
+          height: 44,
+          child: SearchBar(
             hintText: 'Search title, artist, album',
-            border: InputBorder.none,
+            leading: const Icon(Icons.search, size: 19),
+            trailing: [
+              if (query.isNotEmpty)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Clear',
+                  icon: const Icon(Icons.clear, size: 19),
+                  onPressed: ref.read(searchQueryProvider.notifier).clear,
+                ),
+            ],
+            onChanged: ref.read(searchQueryProvider.notifier).set,
           ),
-          onChanged: ref.read(searchQueryProvider.notifier).set,
         ),
         actions: [
-          if (query.isNotEmpty)
-            IconButton(
-              tooltip: 'Clear',
-              icon: const Icon(Icons.clear),
-              onPressed: ref.read(searchQueryProvider.notifier).clear,
-            ),
           IconButton(
             tooltip: 'Filters',
             icon: Badge(
@@ -43,6 +50,7 @@ class SearchScreen extends ConsumerWidget {
             ),
             onPressed: () => showFilterPanel(context, searchFilterProvider),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: query.isEmpty && !filter.isActive

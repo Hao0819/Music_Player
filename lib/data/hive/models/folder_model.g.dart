@@ -23,13 +23,14 @@ class FolderModelAdapter extends TypeAdapter<FolderModel> {
       isSystem: fields[3] as bool,
       sortMode: fields[4] as String,
       colorValue: fields[5] as int?,
+      coverPath: fields[6] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, FolderModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class FolderModelAdapter extends TypeAdapter<FolderModel> {
       ..writeByte(4)
       ..write(obj.sortMode)
       ..writeByte(5)
-      ..write(obj.colorValue);
+      ..write(obj.colorValue)
+      ..writeByte(6)
+      ..write(obj.coverPath);
   }
 
   @override

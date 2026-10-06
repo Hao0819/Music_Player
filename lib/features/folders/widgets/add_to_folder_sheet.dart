@@ -67,17 +67,14 @@ class _AddToFolderSheet extends ConsumerWidget {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.create_new_folder_outlined),
-              title: const Text('New folder'),
+              leading: const Icon(Icons.playlist_add),
+              title: const Text('New playlist'),
               onTap: () async {
-                final result = await promptForFolder(context);
-                if (result == null) return;
-                final actions = ref.read(folderActionsProvider);
-                final folder = await actions.createFolder(
-                  result.name,
-                  colorValue: result.colorValue,
-                );
-                await actions.addTracks(folder.id, trackPaths);
+                final name = await promptForFolder(context);
+                if (name == null) return;
+
+                final folder = await ref.read(folderActionsProvider).createFolder(name);
+                await ref.read(folderActionsProvider).addTracks(folder.id, trackPaths);
                 if (context.mounted) Navigator.pop(context);
               },
             ),

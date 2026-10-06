@@ -80,7 +80,7 @@ class _RootShellState extends ConsumerState<_RootShell> {
                   NavigationDestination(
                     icon: Icon(Icons.folder_outlined),
                     selectedIcon: Icon(Icons.folder),
-                    label: 'Folders',
+                    label: 'Playlists',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.search_outlined),

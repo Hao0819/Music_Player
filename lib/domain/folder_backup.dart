@@ -72,6 +72,7 @@ class BackedUpFolder {
     this.isSystem = false,
     this.sortMode = 'manual',
     this.colorValue,
+    this.coverPath,
   });
 
   factory BackedUpFolder.fromJson(Map<String, Object?> json) {
@@ -88,6 +89,7 @@ class BackedUpFolder {
       isSystem: json['isSystem'] == true,
       sortMode: json['sortMode'] as String? ?? 'manual',
       colorValue: (json['colorValue'] as num?)?.toInt(),
+      coverPath: json['coverPath'] as String?,
       // Paths are the payload, so anything that isn't a usable one is dropped
       // rather than taken as grounds to reject the whole file.
       trackPaths: paths is List
@@ -102,6 +104,12 @@ class BackedUpFolder {
   final bool isSystem;
   final String sortMode;
   final int? colorValue;
+
+  /// Where the chosen cover lived on the device that wrote the backup. Carried
+  /// so restoring onto the same device keeps the picture; on another device the
+  /// path simply will not resolve and the playlist falls back to its artwork.
+  final String? coverPath;
+
   final List<String> trackPaths;
 
   Map<String, Object?> toJson() => {
@@ -111,6 +119,7 @@ class BackedUpFolder {
         'isSystem': isSystem,
         'sortMode': sortMode,
         'colorValue': colorValue,
+        'coverPath': coverPath,
         'trackPaths': trackPaths,
       };
 }
