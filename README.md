@@ -238,6 +238,17 @@ change to the underlying files.
 Tracks are keyed by **file path**, not by MediaStore id, because MediaStore ids
 can be reassigned when the system re-indexes.
 
+**Hive keys are a SHA-1 digest of that path, never the path itself.** Hive
+writes a String key's UTF-8 length into a single byte with no check, so a key
+over 255 bytes writes a truncated length; the write succeeds and the box is
+unreadable on the next launch. These are files pulled off YouTube and a Han
+character costs three bytes, so paths pass 255 easily -- on one real device, 2
+of 1130 paths were over on their own and 7 were over once a folder id was
+prepended, which is what emptied every folder on it. See
+`data/hive/box_keys.dart`; `key_migration.dart` rewrites entries left by the
+old layout. `play_history` uses auto-increment int keys and `playback_session`
+fixed short ones, so neither is affected.
+
 Because folders are keyed by path and stored in the app's private directory,
 they survive an **update** (installing a newer APK over the old one) but not an
 **uninstall** — Android deletes app-private data on uninstall. Install over the

@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'key_migration.dart';
 import 'models/app_settings_model.dart';
 import 'models/folder_model.dart';
 import 'models/folder_track_link.dart';
@@ -69,6 +70,15 @@ Future<void> initHive() async {
   await _openBox<PlayHistoryEntry>(HiveBoxes.playHistory);
   await _openBox<AppSettingsModel>(HiveBoxes.settings);
   await _openBox<dynamic>(HiveBoxes.playbackSession);
+
+  // Entries written by the older path-keyed layout are rewritten here, before
+  // anything reads them. A failure must not keep the app from starting: the
+  // boxes are still perfectly readable, they are simply still at risk.
+  try {
+    await migrateLegacyBoxKeys();
+  } catch (error) {
+    debugPrint('Could not migrate box keys: $error');
+  }
 }
 
 /// Opens a box, and if its file cannot be read, moves that file aside and
@@ -141,14 +151,13 @@ Future<bool> _setAside(String name) async {
     }
   }
 
-  // The lock file holds no data, so it is the one file safe to remove, and a
-  // stale one can keep the replacement box from opening.
-  try {
-    final lock = File(p.join(home, '$base.lock'));
-    if (lock.existsSync()) await lock.delete();
-  } catch (_) {
-    // Not worth failing startup over.
-  }
+  // The lock file is deliberately left alone. Hive opens it with
+  // FileMode.write, so a stale one is recreated rather than being in the way,
+  // and Hive deletes it itself in StorageBackendVm._closeInternal — from the
+  // close that HiveImpl fires without awaiting when an open fails. Deleting it
+  // here raced that close and lost: the un-awaited delete then threw
+  // PathNotFoundException with no one to catch it, which on a real device
+  // showed up as an unhandled exception during startup.
 
   // Nothing to move means the box failed for some other reason — a missing
   // adapter, say — and a fresh file will not be any more readable.

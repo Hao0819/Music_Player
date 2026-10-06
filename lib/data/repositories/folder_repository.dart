@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../domain/folder_backup.dart';
+import '../hive/box_keys.dart';
 import '../hive/hive_setup.dart';
 import '../hive/models/folder_model.dart';
 import '../hive/models/folder_track_link.dart';
@@ -86,7 +87,7 @@ class FolderRepository {
     await folder.save();
   }
 
-  String _linkKey(String folderId, String trackPath) => '$folderId|$trackPath';
+  String _linkKey(String folderId, String trackPath) => folderLinkKey(folderId, trackPath);
 
   String _linkKeyFor(FolderTrackLink link) => _linkKey(link.folderId, link.trackPath);
 

@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 
+import '../hive/box_keys.dart';
 import '../hive/hive_setup.dart';
 import '../hive/models/known_track_record.dart';
 
@@ -35,11 +36,12 @@ class KnownTracksRepository {
     final newPaths = <String>{};
 
     for (final entry in scannedPathsToIds.entries) {
-      final existing = _box.get(entry.key);
+      final key = trackKey(entry.key);
+      final existing = _box.get(key);
 
       if (existing == null) {
         if (!isFirstScan) newPaths.add(entry.key);
-        pending[entry.key] = KnownTrackRecord(
+        pending[key] = KnownTrackRecord(
           path: entry.key,
           mediaStoreId: entry.value,
           firstSeenAt: now,
@@ -54,7 +56,7 @@ class KnownTracksRepository {
       // should cost zero writes.
       if (existing.mediaStoreId == entry.value && !existing.missing) continue;
 
-      pending[entry.key] = KnownTrackRecord(
+      pending[key] = KnownTrackRecord(
         path: existing.path,
         mediaStoreId: entry.value,
         firstSeenAt: existing.firstSeenAt,
@@ -70,7 +72,7 @@ class KnownTracksRepository {
       missingPaths.add(record.path);
       if (record.missing) continue;
 
-      pending[record.path] = KnownTrackRecord(
+      pending[trackKey(record.path)] = KnownTrackRecord(
         path: record.path,
         mediaStoreId: record.mediaStoreId,
         firstSeenAt: record.firstSeenAt,
@@ -96,7 +98,7 @@ class KnownTracksRepository {
       _box.values.where((record) => record.missing).map((record) => record.path).toSet();
 
   Future<void> acknowledge(Iterable<String> paths) =>
-      _markAcknowledged(paths.map(_box.get).whereType<KnownTrackRecord>());
+      _markAcknowledged(paths.map((path) => _box.get(trackKey(path))).whereType<KnownTrackRecord>());
 
   Future<void> acknowledgeAll() => _markAcknowledged(_box.values);
 
@@ -104,7 +106,7 @@ class KnownTracksRepository {
     final pending = <String, KnownTrackRecord>{};
     for (final record in records) {
       if (record.acknowledged) continue;
-      pending[record.path] = KnownTrackRecord(
+      pending[trackKey(record.path)] = KnownTrackRecord(
         path: record.path,
         mediaStoreId: record.mediaStoreId,
         firstSeenAt: record.firstSeenAt,
@@ -116,5 +118,5 @@ class KnownTracksRepository {
     if (pending.isNotEmpty) await _box.putAll(pending);
   }
 
-  Future<void> forget(Iterable<String> paths) => _box.deleteAll(paths);
+  Future<void> forget(Iterable<String> paths) => _box.deleteAll(paths.map(trackKey));
 }
