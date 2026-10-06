@@ -335,6 +335,7 @@ class _FolderPlayHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final controller = ref.read(playerControllerProvider);
     final total = tracks.fold(Duration.zero, (sum, track) => sum + track.duration);
 
@@ -353,7 +354,10 @@ class _FolderPlayHeader extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.28),
+                      // Lighter on paper than on ink. The same black at the
+                      // same strength reads as a smudge under a cover on a
+                      // white page and as barely anything on a dark one.
+                      color: Colors.black.withValues(alpha: isDark ? 0.34 : 0.14),
                       blurRadius: 18,
                       offset: const Offset(0, 8),
                     ),

@@ -94,7 +94,10 @@ class _NowPlayingBody extends ConsumerWidget {
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: Colors.transparent,
+      // Opaque. It was transparent so the blurred-cover backdrop could show
+      // through from the bottom of the stack; with that gone there was nothing
+      // behind it but the route's own black, which is what light mode showed.
+      backgroundColor: scheme.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         scrolledUnderElevation: 0,
