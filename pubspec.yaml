@@ -53,6 +53,7 @@ dependencies:
   crypto: ^3.0.6
   # Lets a playlist take its cover from a photo on the device.
   image_picker: ^1.1.2
+  image_cropper: ^12.2.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -370,6 +371,7 @@ Future<void> handleFolderAction(
 Future<void> _pickCover(BuildContext context, WidgetRef ref, FolderModel folder) async {
   final messenger = ScaffoldMessenger.of(context);
   final actions = ref.read(folderActionsProvider);
+  final isDark = Theme.of(context).brightness == Brightness.dark;
 
   if (folder.coverPath != null) {
     final keep = await showDialog<bool>(
@@ -394,8 +396,40 @@ Future<void> _pickCover(BuildContext context, WidgetRef ref, FolderModel folder)
   }
 
   try {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 90);
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked == null) return;
+
+    // Square, and locked square: a cover is drawn into a square box everywhere
+    // it appears, so letting the crop be any other shape only decides which
+    // part of it gets cut off later, out of sight.
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 90,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Crop cover',
+          lockAspectRatio: true,
+          hideBottomControls: true,
+          initAspectRatio: CropAspectRatioPreset.square,
+          // The crop screen is a native activity, so it cannot inherit the
+          // app's theme — these are the same black-and-white values written
+          // out by hand, and they follow the mode the app is in.
+          toolbarColor: isDark ? const Color(0xFF121212) : const Color(0xFFFFFFFF),
+          toolbarWidgetColor: isDark ? const Color(0xFFFFFFFF) : const Color(0xFF121212),
+          // Not a colour any more: the flag says whether the bar sits on a
+          // light background, so UCrop can pick icons that show up on it.
+          statusBarLight: !isDark,
+          backgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFF121212),
+          activeControlsWidgetColor: isDark ? const Color(0xFFFFFFFF) : const Color(0xFF121212),
+          cropFrameColor: const Color(0xFFFFFFFF),
+          cropGridColor: const Color(0x55FFFFFF),
+          dimmedLayerColor: const Color(0xCC000000),
+        ),
+      ],
+    );
+    if (cropped == null) return;
 
     final directory = Directory(p.join((await getApplicationDocumentsDirectory()).path, 'playlist_covers'));
     if (!await directory.exists()) await directory.create(recursive: true);
@@ -404,9 +438,9 @@ Future<void> _pickCover(BuildContext context, WidgetRef ref, FolderModel folder)
     // overwrite a file that something on screen is still painting.
     final target = p.join(
       directory.path,
-      '${folder.id}-${DateTime.now().millisecondsSinceEpoch}${p.extension(picked.path)}',
+      '${folder.id}-${DateTime.now().millisecondsSinceEpoch}${p.extension(cropped.path)}',
     );
-    await File(picked.path).copy(target);
+    await File(cropped.path).copy(target);
 
     final previous = folder.coverPath;
     await actions.setCover(folder.id, target);

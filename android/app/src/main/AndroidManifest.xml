@@ -40,6 +40,14 @@
             </intent-filter>
         </activity>
 
+        <!-- image_cropper's crop screen. It is a plain Android activity, so it
+             has to be declared here; the package does not merge it in. Locked
+             to portrait because the rest of the app is. -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
+
         <service
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
