@@ -149,14 +149,13 @@ class _FolderListTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tracksAsync = ref.watch(folderTracksProvider(folder.id));
-    final count = tracksAsync.value?.length;
+    final contents = ref.watch(folderTracksProvider(folder.id)).value;
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       leading: _RoundIcon(folder.isSystem ? Icons.favorite_rounded : Icons.folder_rounded),
       title: Text(folder.name),
-      subtitle: count == null ? null : Text('$count track${count == 1 ? '' : 's'}'),
+      subtitle: contents == null ? null : Text(_countLabel(contents)),
       trailing: folder.isSystem
           ? null
           : PopupMenuButton<String>(
@@ -171,6 +170,16 @@ class _FolderListTile extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// `12 tracks`, with any links the scan could not match called out — a count
+/// that silently excluded them is what made missing links look like an empty
+/// folder.
+String _countLabel(FolderContents contents) {
+  final count = contents.tracks.length;
+  final label = '$count track${count == 1 ? '' : 's'}';
+  if (!contents.hasUnavailable) return label;
+  return '$label · ${contents.unavailablePaths.length} not found';
 }
 
 /// Square tinted container behind a leading icon — the same shape as the
@@ -227,7 +236,7 @@ class _FolderCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final count = ref.watch(folderTracksProvider(folder.id)).value?.length;
+    final count = ref.watch(folderTracksProvider(folder.id)).value?.tracks.length;
     final base = AppTheme.folderColor(folder.name, folder.colorValue);
     final onBase = AppTheme.onAccent(base);
 

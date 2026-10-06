@@ -49,7 +49,29 @@ final isFavoriteProvider = Provider.family<bool, String>((ref, trackPath) {
   return ref.watch(folderRepositoryProvider).isFavorite(trackPath);
 });
 
-final folderTracksProvider = Provider.family<AsyncValue<List<Track>>, String>((ref, folderId) {
+/// A folder's contents: the tracks it holds, plus the links that the current
+/// scan could not match to a file.
+///
+/// Unmatched links are reported rather than quietly dropped. A folder that
+/// looks empty because its files are missing and a folder the user never
+/// filled are completely different situations, and from inside the app they
+/// used to be indistinguishable — which is exactly what made a wiped link box
+/// impossible to tell apart from a storage problem.
+class FolderContents {
+  const FolderContents({required this.tracks, required this.unavailablePaths});
+
+  const FolderContents.empty() : tracks = const [], unavailablePaths = const [];
+
+  final List<Track> tracks;
+  final List<String> unavailablePaths;
+
+  /// How many links the folder has, found or not.
+  int get linkCount => tracks.length + unavailablePaths.length;
+
+  bool get hasUnavailable => unavailablePaths.isNotEmpty;
+}
+
+final folderTracksProvider = Provider.family<AsyncValue<FolderContents>, String>((ref, folderId) {
   ref.watch(folderLinksTickProvider);
   final tracksAsync = ref.watch(libraryScanProvider);
   final repository = ref.watch(folderRepositoryProvider);
@@ -62,9 +84,21 @@ final folderTracksProvider = Provider.family<AsyncValue<List<Track>>, String>((r
   return tracksAsync.whenData((allTracks) {
     final byPath = {for (final track in allTracks) track.path: track};
     final orderedPaths = repository.getTrackPaths(folderId);
-    final tracks = orderedPaths.map((path) => byPath[path]).whereType<Track>().toList();
 
-    if (sortMode == FolderSortMode.manual) return tracks;
+    final tracks = <Track>[];
+    final unavailablePaths = <String>[];
+    for (final path in orderedPaths) {
+      final track = byPath[path];
+      if (track == null) {
+        unavailablePaths.add(path);
+      } else {
+        tracks.add(track);
+      }
+    }
+
+    if (sortMode == FolderSortMode.manual) {
+      return FolderContents(tracks: tracks, unavailablePaths: unavailablePaths);
+    }
 
     tracks.sort((a, b) => switch (sortMode) {
           FolderSortMode.title => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
@@ -75,7 +109,7 @@ final folderTracksProvider = Provider.family<AsyncValue<List<Track>>, String>((r
               .compareTo(repository.addedAt(folderId, b.path) ?? DateTime(0)),
           FolderSortMode.manual => 0,
         });
-    return tracks;
+    return FolderContents(tracks: tracks, unavailablePaths: unavailablePaths);
   });
 });
 

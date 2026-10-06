@@ -43,6 +43,9 @@ link — the file itself is untouched.
   library entry are untouched
 - **Favorites** is a built-in folder that can't be renamed or deleted; every
   track row has a heart toggle
+- Entries whose file the current scan can't find are **counted, not hidden**:
+  the folder list shows "N not found" and the folder itself says so above the
+  tracks. They stay in the folder, so they come back if the files do
 
 ### Auto-collections
 Pinned above your own folders in the Folders tab, built from the play log
@@ -124,6 +127,12 @@ rather than created by hand:
 - **Clean up missing files** — removes folder links and history entries left
   behind by audio that is no longer on the device, telling you exactly how many
   of each will go. Never touches files or your other folders
+- **Folder backup** — writes your folders and the tracks in them to a JSON file
+  under `Android/data/com.example.music_player/files/folder_backups`, where a
+  file manager can see it. Restoring adds back only what's missing, so it never
+  removes, renames or reorders anything and is safe to run twice. The same
+  screen reports any saved data the app couldn't read at launch, and where the
+  unreadable file was kept
 - **Download audio** — see [Downloading](#downloading)
 - App version and a note that your library stays on the device
 
@@ -232,7 +241,13 @@ can be reassigned when the system re-indexes.
 Because folders are keyed by path and stored in the app's private directory,
 they survive an **update** (installing a newer APK over the old one) but not an
 **uninstall** — Android deletes app-private data on uninstall. Install over the
-top to keep your folders.
+top to keep your folders, and export a backup first if you're not sure.
+
+Since `folder_track_links` is the only copy of work the user did by hand, an
+unreadable box file is **renamed aside**, never deleted, and the next launch
+starts a fresh box beside it. If even the rename fails, the box runs in memory
+for that session so the file is left intact for the next attempt. Settings →
+Folder backup reports what was set aside and where.
 
 ### Startup never blocks on the platform
 

@@ -1,6 +1,7 @@
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../domain/folder_backup.dart';
 import '../hive/hive_setup.dart';
 import '../hive/models/folder_model.dart';
 import '../hive/models/folder_track_link.dart';
@@ -183,5 +184,67 @@ class FolderRepository {
         .map(_linkKeyFor)
         .toList();
     await _links.deleteAll(keys);
+  }
+
+  /// The whole folder structure as a plain snapshot, in display order.
+  FolderBackup exportBackup() {
+    return FolderBackup(
+      createdAt: DateTime.now(),
+      folders: [
+        for (final folder in getAllFolders())
+          BackedUpFolder(
+            id: folder.id,
+            name: folder.name,
+            createdAt: folder.createdAt,
+            isSystem: folder.isSystem,
+            sortMode: folder.sortMode,
+            colorValue: folder.colorValue,
+            trackPaths: getTrackPaths(folder.id),
+          ),
+      ],
+    );
+  }
+
+  /// Merges a snapshot back in, adding only what is missing.
+  ///
+  /// Nothing is removed and nothing already on the device is overwritten:
+  /// folders the backup knows about are recreated if they are gone, links are
+  /// added where they are absent, and a folder that still exists keeps its
+  /// current name, colour and order. That makes importing the same file twice
+  /// a no-op, which matters because the user restoring a backup usually
+  /// cannot tell whether the first attempt did anything.
+  Future<FolderImportSummary> importBackup(FolderBackup backup) async {
+    var foldersCreated = 0;
+    var linksAdded = 0;
+
+    for (final entry in backup.folders) {
+      // Favorites is recreated under a fixed id by [ensureSystemFolders], so
+      // a backed-up system folder is matched to it by kind, not by id.
+      final folderId = entry.isSystem ? favoritesFolderId : entry.id;
+      if (folderId.isEmpty) continue;
+
+      if (!_folders.containsKey(folderId)) {
+        await _folders.put(
+          folderId,
+          FolderModel(
+            id: folderId,
+            name: entry.name,
+            createdAt: entry.createdAt,
+            isSystem: entry.isSystem,
+            sortMode: entry.sortMode,
+            colorValue: entry.colorValue,
+          ),
+        );
+        foldersCreated++;
+      }
+
+      final missing = entry.trackPaths.where((path) => !isTrackInFolder(folderId, path)).toList();
+      if (missing.isEmpty) continue;
+
+      await addTracks(folderId, missing);
+      linksAdded += missing.length;
+    }
+
+    return FolderImportSummary(foldersCreated: foldersCreated, linksAdded: linksAdded);
   }
 }

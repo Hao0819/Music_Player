@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../../core/utils/date_format.dart';
+
 import '../../download/screens/download_screen.dart';
 import '../../library/providers/library_providers.dart';
+import '../providers/backup_providers.dart';
 import '../providers/maintenance_providers.dart';
 import '../providers/theme_mode_provider.dart';
+import 'folder_backup_screen.dart';
 
 final _packageInfoProvider = FutureProvider<PackageInfo>((ref) => PackageInfo.fromPlatform());
 
@@ -16,6 +20,8 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final stale = ref.watch(staleRecordsProvider);
+    final backups = ref.watch(folderBackupsProvider).value;
+    final setAside = ref.watch(setAsideBoxesProvider);
     final packageInfo = ref.watch(_packageInfoProvider).value;
     final theme = Theme.of(context);
 
@@ -66,6 +72,30 @@ class SettingsScreen extends ConsumerWidget {
             ),
             enabled: !stale.isEmpty,
             onTap: stale.isEmpty ? null : () => _confirmCleanup(context, ref, stale),
+          ),
+          const Divider(height: 32),
+
+          _SectionHeader(title: 'Folders'),
+          ListTile(
+            leading: Icon(
+              setAside.isEmpty ? Icons.backup_outlined : Icons.warning_amber_rounded,
+              color: setAside.isEmpty ? null : theme.colorScheme.error,
+            ),
+            title: const Text('Folder backup'),
+            subtitle: Text(
+              setAside.isNotEmpty
+                  ? 'Some saved data could not be read on this launch'
+                  : switch (backups) {
+                      null => 'Export your folders, or restore them from a file',
+                      [] => 'No backup yet — your folders exist in one place only',
+                      [final latest, ...] => 'Last backup '
+                          '${latest.backup == null ? latest.fileName : formatTimestamp(latest.backup!.createdAt)}',
+                    },
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const FolderBackupScreen()),
+            ),
           ),
           const Divider(height: 32),
 

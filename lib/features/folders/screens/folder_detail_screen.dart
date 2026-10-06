@@ -143,13 +143,20 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
       body: tracksAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('$error')),
-        data: (allTracks) {
+        data: (contents) {
+          final allTracks = contents.tracks;
           if (allTracks.isEmpty) {
-            return const EmptyState(
-              icon: Icons.music_off_outlined,
-              title: 'No tracks in this folder yet',
-              message: 'Add tracks from your Library using multi-select.',
-            );
+            // A folder nobody filled and a folder whose files have all gone
+            // missing need different words — the second is not something the
+            // user did, and telling them apart is the whole point of
+            // tracking unmatched links.
+            return contents.hasUnavailable
+                ? _UnavailableState(count: contents.unavailablePaths.length)
+                : const EmptyState(
+                    icon: Icons.music_off_outlined,
+                    title: 'No tracks in this folder yet',
+                    message: 'Add tracks from your Library using multi-select.',
+                  );
           }
 
           final tracks = isSearching
@@ -174,6 +181,7 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
           return Column(
             children: [
               if (!inSelectionMode) _FolderPlayHeader(tracks: tracks, folder: folder),
+              if (contents.hasUnavailable) _UnavailableBanner(count: contents.unavailablePaths.length),
               Expanded(
                 child: canReorder
                     ? _ReorderableTrackList(folderId: folderId, tracks: tracks, currentPath: currentPath)
@@ -251,6 +259,64 @@ class _FolderDetailScreenState extends ConsumerState<FolderDetailScreen> {
       await ref.read(folderActionsProvider).deleteFolder(folderId);
       if (context.mounted) Navigator.pop(context);
     }
+  }
+}
+
+/// Shown when every track in a folder is a link the scan could not match.
+///
+/// The folder is not empty — it has entries pointing at files that are not
+/// turning up — so the message points at the two things that actually cause
+/// it rather than inviting the user to add tracks.
+class _UnavailableState extends StatelessWidget {
+  const _UnavailableState({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return EmptyState(
+      icon: Icons.help_outline,
+      title: '$count track${count == 1 ? '' : 's'} in this folder '
+          "can't be found",
+      message: 'The files may have been moved, renamed or deleted, or the '
+          'storage they are on is not available. Nothing has been removed '
+          'from the folder — if the files come back, so do these.',
+    );
+  }
+}
+
+/// The same fact, as a strip above a folder that is only partly resolvable.
+class _UnavailableBanner extends StatelessWidget {
+  const _UnavailableBanner({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.help_outline, size: 18, color: scheme.onSecondaryContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$count more track${count == 1 ? '' : 's'} '
+              "in this folder can't be found right now",
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSecondaryContainer),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
