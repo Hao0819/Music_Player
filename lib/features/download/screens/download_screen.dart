@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/duration_format.dart';
 import '../../../services/download/ytdlp_service.dart';
+import '../../folders/widgets/add_to_folder_sheet.dart';
 import '../providers/download_providers.dart';
 
 /// Pulls audio off a link with the embedded yt-dlp and files it into the
@@ -343,62 +345,79 @@ class _DownloadTile extends ConsumerWidget {
       _ => (Icons.downloading, theme.colorScheme.onSurfaceVariant),
     };
 
+    // A finished download is a file in the library now, so the long-press
+    // that files a track from the Library list works here too, without having
+    // to go and find that row first. Only with a real file path: on the
+    // pre-Android-10 branch the native side can hand back a `content://` URI
+    // instead, and a folder link keyed on one of those points at nothing.
+    final path = task.path;
+    final canFile =
+        task.status == DownloadStatus.completed && path != null && path.startsWith('/');
+
     final card = Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    task.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        onLongPress: canFile ? () => showAddToFolderSheet(context, ref, [path]) : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: color, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      task.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                  ),
+                  if (!task.isFinished)
+                    IconButton(
+                      tooltip: 'Cancel',
+                      icon: const Icon(Icons.close),
+                      onPressed: () => ref.read(downloadQueueProvider.notifier).cancel(task.id),
+                    ),
+                ],
+              ),
+              if (!task.isFinished) ...[
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  // yt-dlp reports -1 until it has a total size to divide by.
+                  value: task.percent <= 0 ? null : task.percent / 100,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  task.eta > Duration.zero
+                      ? '${task.percent.toStringAsFixed(0)}% · ${formatDuration(task.eta)} left'
+                      : task.detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                if (!task.isFinished)
-                  IconButton(
-                    tooltip: 'Cancel',
-                    icon: const Icon(Icons.close),
-                    onPressed: () => ref.read(downloadQueueProvider.notifier).cancel(task.id),
+              ] else if (task.detail.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  task.status == DownloadStatus.completed
+                      ? (canFile
+                          ? 'In your library · hold to add it to a playlist'
+                          : 'Added to your library')
+                      : task.detail,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: task.status == DownloadStatus.failed
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurfaceVariant,
                   ),
+                ),
               ],
-            ),
-            if (!task.isFinished) ...[
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                // yt-dlp reports -1 until it has a total size to divide by.
-                value: task.percent <= 0 ? null : task.percent / 100,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                task.eta > Duration.zero
-                    ? '${task.percent.toStringAsFixed(0)}% · ${formatDuration(task.eta)} left'
-                    : task.detail,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ] else if (task.detail.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                task.status == DownloadStatus.completed ? 'Added to your library' : task.detail,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: task.status == DownloadStatus.failed
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
