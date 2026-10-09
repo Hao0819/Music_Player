@@ -29,6 +29,10 @@ link — the file itself is untouched.
 - A–Z index down the right edge — tap or drag a letter to jump straight to
   that section instead of scrolling a long library
 - Pull down to rescan
+- Hold a row to select, then hide what you never want to see in this list
+  again. Hiding is **not** deleting: the file stays on the device and keeps
+  every playlist link, favorite and history entry pointing at it, so restoring
+  it later puts everything back
 - Album art, and for a track that has none, one of six bundled sleeves chosen
   from its MediaStore id — random across a library, fixed for one track, so a
   song never changes sleeve under you
@@ -158,6 +162,10 @@ shows the dialog once and a refusal cannot be re-requested.
 - **Clean up missing files** — removes folder links and history entries left
   behind by audio that is no longer on the device, telling you exactly how many
   of each will go. Never touches files or your other folders
+- **Hidden tracks** — everything hidden from the Library, with a one-tap
+  restore per track and a Restore all. The row names itself even when the list
+  is empty, since this is the only place that explains where a hidden track
+  went
 - **Folder backup** — writes your folders and the tracks in them to a JSON file
   under `Android/data/com.example.music_player/files/folder_backups`, where a
   file manager can see it. Restoring adds back only what's missing, so it never
@@ -258,6 +266,7 @@ Hive only ever holds **links and bookkeeping**:
 | `known_tracks` | files seen in previous scans, for new/deleted diffing |
 | `play_history` | append-only play log |
 | `settings` | theme mode, library sort preference, repeat mode, download-history visibility, recent download searches |
+| `hidden_tracks` | track **file paths** the Library does not list |
 | `playback_session` | last queue (paths), current track, position |
 
 Titles, artists, artwork and durations are always re-read live from
@@ -379,15 +388,15 @@ lib/
   core/                         theme, shared notifiers, formatting/matching helpers
   data/
     hive/                       box setup + @HiveType models
-    repositories/               audio library, folders, history, known tracks, settings
+    repositories/               audio library, folders, history, known tracks, hidden tracks, settings
   domain/                       Track, sort modes, filter state, filtering rules
   features/
-    library/                    scan, sort, search, filters, multi-select, A–Z index
+    library/                    scan, sort, search, filters, multi-select, hiding, A–Z index
     folders/                    CRUD, folder detail, add-to-folder sheet
     favorites_history/          recently played / most played views
     player/                     player controller, mini player, now playing, queue
     download/                   search, recent searches, download queue, history
-    settings/                   theme, rescan, cleanup, new-audio screen, about
+    settings/                   theme, rescan, cleanup, hidden tracks, new-audio screen, about
   services/
     audio/                      AudioPlayerHandler (just_audio + audio_service)
     permissions/                permission service + provider
@@ -532,6 +541,13 @@ the navigation bar, a download stopped clearing the search that found it, the
 last five queries are remembered, a finished download can be filed into a
 playlist by holding it, and a track with no embedded artwork gets a bundled
 sleeve instead of a grey square. Installed and checked on a device.
+
+Most recently, the Library can hide a track. This came up as "can you delete
+audio from the Library" and landed as hiding rather than deleting on purpose:
+deleting is the one thing this app has never done, it cannot be undone, and
+under scoped storage it would have meant a system consent dialog for every file
+the app did not download itself. Hiding costs one Hive box of paths, is a
+complete undo, and leaves the files alone.
 
 ### Known limitations
 
