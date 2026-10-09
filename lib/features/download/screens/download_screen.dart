@@ -131,6 +131,7 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen> {
             ),
             const SizedBox(height: 8),
             const _VersionRow(),
+            _RecentSearches(onSelected: _useRecent),
             _SearchResults(onDownload: _start),
             const Divider(height: 32),
             if (tasks.isEmpty)
@@ -197,6 +198,15 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen> {
     await ref.read(ytdlpSearchProvider.notifier).run(_urlController.text);
   }
 
+  /// Re-runs a search from the recent list.
+  Future<void> _useRecent(String query) async {
+    _urlController.text = query;
+    // The field owns the Search/Download button and its own clear icon, so
+    // filling it from outside still has to rebuild it.
+    setState(() {});
+    await _submit();
+  }
+
   Future<void> _start(String url) async {
     final error = await ref.read(downloadQueueProvider.notifier).start(url, format: _format);
     if (!mounted) return;
@@ -205,10 +215,74 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
-    _urlController.clear();
-    ref.read(ytdlpSearchProvider.notifier).clear();
+
+    // The query and its results stay exactly where they are. Taking two or
+    // three songs out of one search is how this screen actually gets used,
+    // and clearing the field on the first download meant retyping the same
+    // thing for every one after it — the X in the field is what clears them.
+    //
+    // Which does mean the new row is below the results rather than in view,
+    // so the snack bar is the confirmation that anything happened at all.
     FocusScope.of(context).unfocus();
-    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Download started'), duration: Duration(seconds: 2)),
+    );
+  }
+}
+
+/// The last few search terms, offered under the field so a query can be run
+/// again without retyping it.
+class _RecentSearches extends ConsumerWidget {
+  const _RecentSearches({required this.onSelected});
+
+  final Future<void> Function(String query) onSelected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recent = ref.watch(recentDownloadSearchesProvider);
+    final results = ref.watch(ytdlpSearchProvider);
+    final theme = Theme.of(context);
+
+    // Stood down while a search is in flight or its results are on screen:
+    // otherwise the list you just asked for and the list of things you asked
+    // for earlier are stacked in the same place under the field.
+    final hidden = switch (results) {
+      AsyncLoading() => true,
+      AsyncData(:final value) => value.isNotEmpty,
+      _ => false,
+    };
+    if (recent.isEmpty || hidden) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: Text('Recent searches', style: theme.textTheme.titleSmall)),
+            TextButton(
+              onPressed: ref.read(recentDownloadSearchesProvider.notifier).clear,
+              child: const Text('Clear'),
+            ),
+          ],
+        ),
+        for (final query in recent)
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            leading: Icon(Icons.history, size: 20, color: theme.colorScheme.onSurfaceVariant),
+            title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: IconButton(
+              tooltip: 'Remove',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () => ref.read(recentDownloadSearchesProvider.notifier).forget(query),
+            ),
+            onTap: () => onSelected(query),
+          ),
+      ],
+    );
   }
 }
 

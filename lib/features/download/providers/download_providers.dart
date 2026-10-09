@@ -37,6 +37,48 @@ final ytdlpVersionProvider = FutureProvider<String?>((ref) async {
   return ref.watch(ytdlpServiceProvider).version();
 });
 
+/// The last few things searched for here, newest first, kept across launches.
+///
+/// Searching is slow enough — it scrapes rather than calling an API — that
+/// retyping a query you ran a minute ago is a real cost, and the terms are
+/// usually song names that are awkward to type twice.
+class RecentDownloadSearchesNotifier extends Notifier<List<String>> {
+  @override
+  List<String> build() => ref.read(settingsRepositoryProvider).recentDownloadSearches;
+
+  Future<void> remember(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
+    // A repeat moves to the front instead of adding a second row, ignoring
+    // case: searching the same thing twice is the common case and it should
+    // not spend two of the five slots.
+    final lower = trimmed.toLowerCase();
+    final next = [
+      trimmed,
+      ...state.where((entry) => entry.toLowerCase() != lower),
+    ].take(SettingsRepository.recentDownloadSearchLimit).toList();
+
+    state = next;
+    await ref.read(settingsRepositoryProvider).saveRecentDownloadSearches(next);
+  }
+
+  Future<void> forget(String query) async {
+    state = state.where((entry) => entry != query).toList();
+    await ref.read(settingsRepositoryProvider).saveRecentDownloadSearches(state);
+  }
+
+  Future<void> clear() async {
+    state = const [];
+    await ref.read(settingsRepositoryProvider).saveRecentDownloadSearches(const []);
+  }
+}
+
+final recentDownloadSearchesProvider =
+    NotifierProvider<RecentDownloadSearchesNotifier, List<String>>(
+  RecentDownloadSearchesNotifier.new,
+);
+
 /// Results for the download screen's search box. Starts empty rather than
 /// running a query on build, since there is nothing to search for yet.
 class YtdlpSearchNotifier extends AsyncNotifier<List<YtdlpSearchResult>> {
@@ -46,6 +88,11 @@ class YtdlpSearchNotifier extends AsyncNotifier<List<YtdlpSearchResult>> {
   Future<void> run(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
+
+    // Remembered on the way in, not once the results are back: a search worth
+    // retrying from the recent list is exactly one that was slow or came back
+    // empty.
+    await ref.read(recentDownloadSearchesProvider.notifier).remember(trimmed);
 
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => ref.read(ytdlpServiceProvider).search(trimmed));

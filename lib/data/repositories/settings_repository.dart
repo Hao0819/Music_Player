@@ -38,4 +38,18 @@ class SettingsRepository {
     settings.downloadHistoryHidden = hidden;
     await save(settings);
   }
+
+  /// How many recent download searches are kept. Short on purpose: the list
+  /// sits directly under the search field, and anything longer pushes the
+  /// results off the screen.
+  static const recentDownloadSearchLimit = 5;
+
+  List<String> get recentDownloadSearches =>
+      List.unmodifiable(current.recentDownloadSearches ?? const <String>[]);
+
+  Future<void> saveRecentDownloadSearches(List<String> queries) async {
+    final settings = current;
+    settings.recentDownloadSearches = queries.take(recentDownloadSearchLimit).toList();
+    await save(settings);
+  }
 }

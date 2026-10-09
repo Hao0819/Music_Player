@@ -24,11 +24,18 @@ class AppSettingsModel extends HiveObject {
   @HiveField(4)
   bool? downloadHistoryHidden;
 
+  /// The last few things typed into the download screen's search box, newest
+  /// first. Nullable for the same reason as the two above — settings written
+  /// by older versions have no value here, and null means none yet.
+  @HiveField(5)
+  List<String>? recentDownloadSearches;
+
   AppSettingsModel({
     this.themeMode = 'system',
     this.librarySortField = 'title',
     this.librarySortAscending = true,
     this.repeatMode,
     this.downloadHistoryHidden,
+    this.recentDownloadSearches,
   });
 }

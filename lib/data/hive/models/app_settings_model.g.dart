@@ -22,13 +22,14 @@ class AppSettingsModelAdapter extends TypeAdapter<AppSettingsModel> {
       librarySortAscending: fields[2] as bool,
       repeatMode: fields[3] as String?,
       downloadHistoryHidden: fields[4] as bool?,
+      recentDownloadSearches: (fields[5] as List?)?.cast<String>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettingsModel obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.themeMode)
       ..writeByte(1)
@@ -38,7 +39,9 @@ class AppSettingsModelAdapter extends TypeAdapter<AppSettingsModel> {
       ..writeByte(3)
       ..write(obj.repeatMode)
       ..writeByte(4)
-      ..write(obj.downloadHistoryHidden);
+      ..write(obj.downloadHistoryHidden)
+      ..writeByte(5)
+      ..write(obj.recentDownloadSearches);
   }
 
   @override
