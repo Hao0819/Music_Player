@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'core/theme/app_theme.dart';
+import 'features/download/screens/download_screen.dart';
 import 'features/folders/screens/folders_screen.dart';
 import 'features/library/screens/library_screen.dart';
 import 'features/player/providers/playback_session_provider.dart';
 import 'features/player/widgets/mini_player.dart';
-import 'features/search/screens/search_screen.dart';
 import 'features/settings/providers/theme_mode_provider.dart';
 import 'features/settings/screens/settings_screen.dart';
 import 'services/permissions/permission_provider.dart';
@@ -46,10 +46,21 @@ class _RootShellState extends ConsumerState<_RootShell> {
   /// only guards against asking twice in one session.
   bool _askedAboutNotifications = false;
 
+  /// Whether the Download tab has been opened yet.
+  ///
+  /// [IndexedStack] builds every child whether it is on screen or not, and
+  /// the download screen's first build unpacks the bundled Python runtime —
+  /// several seconds of IO that has no business running during launch for a
+  /// tab the user may never open. It takes its place in the stack the first
+  /// time it is selected, and keeps its state from then on like the others.
+  bool _downloadOpened = false;
+
+  static const _downloadTab = 2;
+
   static const _screens = [
     LibraryScreen(),
     FoldersScreen(),
-    SearchScreen(),
+    DownloadScreen(),
     SettingsScreen(),
   ];
 
@@ -80,14 +91,28 @@ class _RootShellState extends ConsumerState<_RootShell> {
         }
 
         return Scaffold(
-          body: IndexedStack(index: _index, children: _screens),
+          body: IndexedStack(
+            index: _index,
+            children: [
+              for (var i = 0; i < _screens.length; i++)
+                // A placeholder rather than a shorter list: the index into
+                // this stack is the navigation bar's own selection.
+                if (i == _downloadTab && !_downloadOpened)
+                  const SizedBox.shrink()
+                else
+                  _screens[i],
+            ],
+          ),
           bottomNavigationBar: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const MiniPlayer(),
               NavigationBar(
                 selectedIndex: _index,
-                onDestinationSelected: (i) => setState(() => _index = i),
+                onDestinationSelected: (i) => setState(() {
+                  _index = i;
+                  if (i == _downloadTab) _downloadOpened = true;
+                }),
                 destinations: const [
                   NavigationDestination(
                     icon: Icon(Icons.library_music_outlined),
@@ -99,10 +124,14 @@ class _RootShellState extends ConsumerState<_RootShell> {
                     selectedIcon: Icon(Icons.folder),
                     label: 'Playlists',
                   ),
+                  // The tab that used to be here searched the library, which
+                  // is what the Library tab's own field already does; the
+                  // downloader is the one screen that had no way in but
+                  // through Settings.
                   NavigationDestination(
-                    icon: Icon(Icons.search_outlined),
-                    selectedIcon: Icon(Icons.search),
-                    label: 'Search',
+                    icon: Icon(Icons.download_outlined),
+                    selectedIcon: Icon(Icons.download),
+                    label: 'Download',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.settings_outlined),

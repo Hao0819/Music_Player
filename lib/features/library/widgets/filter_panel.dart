@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/library_filter_notifier.dart';
 import '../../../core/utils/duration_format.dart';
 import '../../../domain/library_filter_state.dart';
-import '../../library/providers/library_providers.dart';
+import '../providers/library_providers.dart';
 
-/// [provider] decides whose filters are being edited — the Library tab and
-/// the Search tab each pass their own.
+/// [provider] decides whose filters are being edited. Only the Library tab
+/// has filters now, but the panel is still passed the provider rather than
+/// reaching for one, so a second filtered list costs nothing to add.
 Future<void> showFilterPanel(BuildContext context, LibraryFilterProvider provider) {
   return showModalBottomSheet(
     context: context,

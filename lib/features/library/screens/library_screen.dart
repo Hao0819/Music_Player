@@ -7,7 +7,7 @@ import '../../../widgets/empty_state.dart';
 import '../../folders/providers/folder_providers.dart';
 import '../../folders/widgets/add_to_folder_sheet.dart';
 import '../../player/providers/player_providers.dart';
-import '../../search/widgets/filter_panel.dart';
+import '../widgets/filter_panel.dart';
 import '../providers/library_providers.dart';
 import '../widgets/alphabet_index_bar.dart';
 import '../widgets/sort_menu_button.dart';

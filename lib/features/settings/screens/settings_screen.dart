@@ -5,7 +5,6 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/utils/date_format.dart';
 
-import '../../download/screens/download_screen.dart';
 import '../../library/providers/library_providers.dart';
 import '../../../services/permissions/permission_provider.dart';
 import '../providers/backup_providers.dart';
@@ -111,18 +110,6 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const FolderBackupScreen()),
-            ),
-          ),
-          const SizedBox(height: 28),
-
-          _SectionHeader(title: 'Download'),
-          ListTile(
-            leading: const Icon(Icons.download_outlined),
-            title: const Text('Download audio'),
-            subtitle: const Text('Saves to Music/MusicPlayer and adds it to your library'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const DownloadScreen()),
             ),
           ),
           const SizedBox(height: 28),
