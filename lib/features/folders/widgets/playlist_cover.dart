@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -5,13 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../widgets/artwork_image.dart';
+import '../../../widgets/fallback_cover.dart';
 import '../providers/folder_providers.dart';
 
 /// A playlist's cover, in falling order of preference:
 ///
 /// 1. a picture the user picked for it,
 /// 2. the first track in it that actually has artwork,
-/// 3. the same plain record every uncovered track gets.
+/// 3. the same stand-in sleeve its first track gets in a list.
 ///
 /// Step 2 is deliberately "the first track that has one" rather than "the first
 /// track". Half of a ripped library has no embedded picture, so taking track
@@ -41,6 +43,7 @@ class PlaylistCover extends ConsumerStatefulWidget {
 class _PlaylistCoverState extends ConsumerState<PlaylistCover> {
   Uint8List? _bytes;
   File? _file;
+  int? _fallbackSeed;
   String? _resolvedFor;
 
   @override
@@ -55,11 +58,15 @@ class _PlaylistCoverState extends ConsumerState<PlaylistCover> {
         '${contents?.tracks.isEmpty ?? true ? '' : contents!.tracks.first.path}';
     if (key != _resolvedFor) {
       _resolvedFor = key;
-      _resolve(folder?.coverPath, contents?.tracks.map((track) => track.id).toList() ?? const []);
+      final trackIds = contents?.tracks.map((track) => track.id).toList() ?? const <int>[];
+      // Off the build pass: a picked cover file and an empty playlist both
+      // resolve without ever awaiting, and setState during build throws.
+      scheduleMicrotask(() => _resolve(folder?.coverPath, trackIds));
     }
 
     final file = _file;
     final bytes = _bytes;
+    final seed = _fallbackSeed;
 
     final Widget child;
     if (file != null) {
@@ -72,7 +79,11 @@ class _PlaylistCoverState extends ConsumerState<PlaylistCover> {
         fit: BoxFit.cover,
         gaplessPlayback: true,
       );
+    } else if (seed != null) {
+      child = FallbackCover(seed: seed, size: widget.size);
     } else {
+      // Only an empty playlist lands here: with no track there is nothing to
+      // take a sleeve from either.
       child = Container(
         width: widget.size,
         height: widget.size,
@@ -91,7 +102,7 @@ class _PlaylistCoverState extends ConsumerState<PlaylistCover> {
     if (coverPath != null) {
       final file = File(coverPath);
       if (file.existsSync()) {
-        if (mounted) setState(() { _file = file; _bytes = null; });
+        if (mounted) setState(() { _file = file; _bytes = null; _fallbackSeed = null; });
         return;
       }
       // The picture was deleted from under us. Fall through to the artwork so
@@ -101,11 +112,20 @@ class _PlaylistCoverState extends ConsumerState<PlaylistCover> {
     for (final id in trackIds.take(PlaylistCover.searchDepth)) {
       final bytes = await loadArtwork(ref, id);
       if (bytes != null && bytes.isNotEmpty) {
-        if (mounted) setState(() { _bytes = bytes; _file = null; });
+        if (mounted) setState(() { _bytes = bytes; _file = null; _fallbackSeed = null; });
         return;
       }
     }
 
-    if (mounted) setState(() { _bytes = null; _file = null; });
+    // Nothing in the playlist has a picture, so it shows what its first track
+    // shows — the same sleeve in both places, rather than a cover that
+    // matches nothing inside it.
+    if (mounted) {
+      setState(() {
+        _bytes = null;
+        _file = null;
+        _fallbackSeed = trackIds.isEmpty ? null : trackIds.first;
+      });
+    }
   }
 }

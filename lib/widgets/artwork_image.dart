@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:on_audio_query/on_audio_query.dart' show ArtworkType;
 
 import '../features/library/providers/library_providers.dart';
+import 'fallback_cover.dart';
 
 /// Artwork loader that fetches once per track and caches the result.
 ///
@@ -67,6 +68,14 @@ class _ArtworkCache {
 class _ArtworkImageState extends ConsumerState<ArtworkImage> {
   Uint8List? _bytes;
 
+  /// Whether the artwork query has answered for the current track.
+  ///
+  /// The stand-in cover waits on this. Drawn before the answer is in, it would
+  /// put a photo in front of every track that does have a picture for as long
+  /// as the platform channel took to reply — a flash of the wrong sleeve,
+  /// which is a worse first frame than the plain block it replaced.
+  bool _resolved = false;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +87,7 @@ class _ArtworkImageState extends ConsumerState<ArtworkImage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.trackId != widget.trackId) {
       _bytes = null;
+      _resolved = false;
       _load();
     }
   }
@@ -87,13 +97,19 @@ class _ArtworkImageState extends ConsumerState<ArtworkImage> {
     if (id == null) return;
 
     if (_ArtworkCache.contains(id)) {
-      setState(() => _bytes = _ArtworkCache.peek(id));
+      setState(() {
+        _bytes = _ArtworkCache.peek(id);
+        _resolved = true;
+      });
       return;
     }
 
     final bytes = await _ArtworkCache.load(ref, id);
     if (!mounted) return;
-    setState(() => _bytes = bytes);
+    setState(() {
+      _bytes = bytes;
+      _resolved = true;
+    });
   }
 
   @override
@@ -102,9 +118,23 @@ class _ArtworkImageState extends ConsumerState<ArtworkImage> {
     final bytes = _bytes;
 
     if (bytes == null || bytes.isEmpty) {
-      // The default cover: a plain record on flat grey. Not `music_off` — a
-      // struck-through note reads as "muted" or "cannot play", which is wrong
-      // for a track that plays perfectly well and only lacks a picture.
+      final id = widget.trackId;
+
+      // A track the scan knows about but that carries no picture gets one of
+      // the bundled sleeves instead of a blank. Half a ripped library has no
+      // embedded artwork, and a screen of identical grey squares tells the
+      // user nothing about which row is which.
+      if (_resolved && id != null) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          child: FallbackCover(seed: id, size: widget.size),
+        );
+      }
+
+      // Still waiting, or there is no track at all — the mini player draws
+      // this before anything has been played. A plain record, not
+      // `music_off`: a struck-through note reads as "muted" or "cannot play",
+      // which is wrong for a track that plays perfectly well.
       return Container(
         width: widget.size,
         height: widget.size,
