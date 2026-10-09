@@ -11,6 +11,7 @@ import '../providers/backup_providers.dart';
 import '../providers/maintenance_providers.dart';
 import '../providers/theme_mode_provider.dart';
 import 'folder_backup_screen.dart';
+import 'hidden_tracks_screen.dart';
 
 final _packageInfoProvider = FutureProvider<PackageInfo>((ref) => PackageInfo.fromPlatform());
 
@@ -21,6 +22,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final stale = ref.watch(staleRecordsProvider);
+    final hidden = ref.watch(hiddenTracksProvider);
     final backups = ref.watch(folderBackupsProvider).value;
     final setAside = ref.watch(setAsideBoxesProvider);
     final packageInfo = ref.watch(_packageInfoProvider).value;
@@ -87,6 +89,24 @@ class SettingsScreen extends ConsumerWidget {
             ),
             enabled: !stale.isEmpty,
             onTap: stale.isEmpty ? null : () => _confirmCleanup(context, ref, stale),
+          ),
+          ListTile(
+            leading: const Icon(Icons.visibility_off_outlined),
+            title: const Text('Hidden tracks'),
+            // Named even when the list is empty, since this is the only place
+            // that explains where a hidden track went and how to get it back.
+            subtitle: Text(
+              hidden.isEmpty
+                  ? 'Nothing hidden — hold a track in your Library to hide it'
+                  : '${hidden.length} track${hidden.length == 1 ? '' : 's'} kept out of the Library list',
+            ),
+            enabled: hidden.isNotEmpty,
+            trailing: hidden.isEmpty ? null : const Icon(Icons.chevron_right),
+            onTap: hidden.isEmpty
+                ? null
+                : () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const HiddenTracksScreen()),
+                    ),
           ),
           const SizedBox(height: 28),
 

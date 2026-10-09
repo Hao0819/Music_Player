@@ -210,6 +210,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ref.read(librarySelectionProvider.notifier).clear();
             },
           ),
+          IconButton(
+            tooltip: 'Hide from Library',
+            icon: const Icon(Icons.visibility_off_outlined),
+            onPressed: () => _hideSelected(selection.toList()),
+          ),
         ],
       );
     }
@@ -268,6 +273,37 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         ),
         const SortMenuButton(),
       ],
+    );
+  }
+
+  /// Drops the selected rows out of the Library's list.
+  ///
+  /// No confirmation, because nothing is deleted — the files and every
+  /// playlist link to them are untouched, so the honest cost of a misfire is
+  /// one undo. That is also why the snack bar carries the action rather than a
+  /// dialog asking first: a prompt before a reversible change is friction
+  /// charged on every correct use to save the rare wrong one.
+  Future<void> _hideSelected(List<String> paths) async {
+    await ref.read(hiddenTracksProvider.notifier).hide(paths);
+    ref.read(librarySelectionProvider.notifier).clear();
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    // Cleared first so hiding a few batches in a row does not queue up snack
+    // bars whose undo no longer matches what the user is looking at.
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          paths.length == 1
+              ? 'Hidden from your Library'
+              : '${paths.length} tracks hidden from your Library',
+        ),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => ref.read(hiddenTracksProvider.notifier).unhide(paths),
+        ),
+      ),
     );
   }
 

@@ -8,6 +8,7 @@ import '../../../core/library_filter_notifier.dart';
 import '../../../core/selection_notifier.dart';
 import '../../../core/text_query_notifier.dart';
 import '../../../data/repositories/audio_library_repository.dart';
+import '../../../data/repositories/hidden_tracks_repository.dart';
 import '../../../data/repositories/history_repository.dart';
 import '../../../data/repositories/known_tracks_repository.dart';
 import '../../../data/repositories/settings_repository.dart';
@@ -231,10 +232,58 @@ final librarySearchQueryProvider = NotifierProvider<TextQueryNotifier, String>(T
 
 final libraryFilterProvider = LibraryFilterProvider(LibraryFilterNotifier.new);
 
+final hiddenTracksRepositoryProvider =
+    Provider<HiddenTracksRepository>((ref) => HiddenTracksRepository());
+
+/// The paths the user has hidden from the Library.
+///
+/// Mirrored in a notifier rather than re-read from the box on each rebuild so
+/// that hiding a row drops it from the list in the same frame, without waiting
+/// on the write to disk.
+class HiddenTracksNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => ref.read(hiddenTracksRepositoryProvider).paths;
+
+  Future<void> hide(Iterable<String> paths) async {
+    state = {...state, ...paths};
+    await ref.read(hiddenTracksRepositoryProvider).hide(paths);
+  }
+
+  Future<void> unhide(Iterable<String> paths) async {
+    final restored = paths.toSet();
+    state = state.where((path) => !restored.contains(path)).toSet();
+    await ref.read(hiddenTracksRepositoryProvider).unhide(restored);
+  }
+
+  Future<void> unhideAll() async {
+    state = const {};
+    await ref.read(hiddenTracksRepositoryProvider).unhideAll();
+  }
+}
+
+final hiddenTracksProvider =
+    NotifierProvider<HiddenTracksNotifier, Set<String>>(HiddenTracksNotifier.new);
+
+/// The hidden paths resolved back to scanned tracks, so they can be listed and
+/// restored with the same row the Library uses.
+///
+/// A hidden file that has since left the device simply does not resolve, which
+/// is why the screen compares this length against [hiddenTracksProvider]
+/// rather than assuming the two match.
+final hiddenLibraryProvider = Provider<List<Track>>((ref) {
+  final hidden = ref.watch(hiddenTracksProvider);
+  final byPath = ref.watch(tracksByPathProvider);
+
+  final tracks = [for (final path in hidden) ?byPath[path]];
+  tracks.sort((a, b) => a.titleKey.compareTo(b.titleKey));
+  return tracks;
+});
+
 /// The library exactly as the list renders it: sorted, then narrowed by the
 /// Library tab's own search box and filter panel.
 final visibleLibraryProvider = Provider<AsyncValue<List<Track>>>((ref) {
   final tracksAsync = ref.watch(libraryScanProvider);
+  final hidden = ref.watch(hiddenTracksProvider);
   final sort = ref.watch(librarySortProvider);
   final query = ref.watch(librarySearchQueryProvider);
   final filter = ref.watch(libraryFilterProvider);
@@ -243,7 +292,16 @@ final visibleLibraryProvider = Provider<AsyncValue<List<Track>>>((ref) {
 
   return tracksAsync.whenData((tracks) {
     final matched = filterTracks(
-      tracks: tracks,
+      // Hiding is applied before the filters rather than inside them: it is
+      // not a filter the user can see or clear from the panel, and the
+      // short-circuit keeps the common case of nothing hidden from copying the
+      // whole library on every rebuild.
+      tracks: hidden.isEmpty
+          ? tracks
+          : [
+              for (final track in tracks)
+                if (!hidden.contains(track.path)) track,
+            ],
       query: query,
       filter: filter,
       categorizedPaths: folderRepository.getCategorizedPaths(),
