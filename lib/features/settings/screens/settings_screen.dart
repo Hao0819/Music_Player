@@ -117,7 +117,7 @@ class SettingsScreen extends ConsumerWidget {
           _SectionHeader(title: 'About'),
           ListTile(
             leading: const Icon(Icons.music_note_outlined),
-            title: Text(packageInfo?.appName ?? 'Music Player'),
+            title: Text(packageInfo?.appName ?? 'FUNNY Music'),
             subtitle: Text(
               packageInfo == null
                   ? 'Local audio player'
