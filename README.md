@@ -1,4 +1,4 @@
-# Music Player
+# FUNNY Music
 
 A local audio player for Android, built with Flutter. It plays the audio files
 already on your device — no streaming service, no account, no cloud library.
@@ -21,8 +21,7 @@ link — the file itself is untouched.
 ### Library
 - Scans on-device audio via MediaStore (m4a, mp3, wav, flac and others),
   including folders like `Download/MusicDownload` and secondary volumes
-- Search box and the same filter panel the Search tab uses
-- One-tap chips: **All / In a folder / Not in a folder**
+- Search box and a filter panel, both in the Library tab's own app bar
 - Songs filed into folders show the folder names on their row (Favorites is
   left out, since the heart already shows it)
 - Sort by title, artist, album, date added or duration, ascending or descending
@@ -30,7 +29,9 @@ link — the file itself is untouched.
 - A–Z index down the right edge — tap or drag a letter to jump straight to
   that section instead of scrolling a long library
 - Pull down to rescan
-- Album art, with a clearly-marked "no cover" placeholder when a track has none
+- Album art, and for a track that has none, one of six bundled sleeves chosen
+  from its MediaStore id — random across a library, fixed for one track, so a
+  song never changes sleeve under you
 - WhatsApp voice notes and audio are filtered out
 
 ### Folders
@@ -57,13 +58,14 @@ rather than created by hand:
 - "Clear history" empties the log without touching folders, favorites or files
 
 ### Search & filter
-- Global search across title, artist and album — multi-word queries match
-  across fields in any order ("beatles yesterday" works)
+- Search across title, artist and album from the Library tab — multi-word
+  queries match across fields in any order ("beatles yesterday" works)
 - Per-folder search inside any folder
 - Filters, combinable: format · duration range · in-a-folder vs unfiled ·
   recently added / recently played
-- The Library tab and the Search tab keep independent search text and
-  filters, so changing one doesn't disturb the other
+- There is no separate Search tab. It searched the same three fields the
+  Library tab's own field does, so the quarter of the navigation bar it was
+  spending went to the downloader instead
 
 ### Playback
 - Play, pause, previous, next, seek
@@ -90,12 +92,23 @@ rather than created by hand:
 - Your existing library on first install is the baseline, not "new"
 
 ### Downloading
-- **Search by name** in **Settings → Download audio**, then tap a result to
-  download it. No copying links, no browser
+- Its own **Download** tab, third in the navigation bar. The screen is built
+  the first time you open it rather than at launch, so the Python runtime is
+  not unpacked during startup for a tab you may never open
+- **Search by name**, then tap a result to download it. No copying links, no
+  browser
 - **Or paste a link** into the same box — one field, not two: text that parses
   as an http(s) URL is downloaded, anything else is searched. So when search
   doesn't surface what you want, a link copied from YouTube still works
 - Results show thumbnail, channel and duration
+- **A download leaves the search alone.** The query and all twenty results
+  stay where they are, so taking a second and third song out of one search is
+  a tap each; the X in the field is the only thing that clears them
+- The **last five queries** sit under the field and survive a restart. A
+  repeat moves to the front rather than taking a second slot, and the list
+  stands down while results are on screen
+- **Hold a finished download** to file it into a playlist, without going to
+  find its row in the library first
 - Downloads land in `Music/MusicPlayer/` as tagged audio, indexed by MediaStore
   so they show up in your library like any other track
 - Choose **MP3 / M4A / Opus**; the video stream is never downloaded, only the
@@ -120,7 +133,7 @@ rather than created by hand:
   their own, and there is no recolour action
 - Playlists are a list of rows: cover, name, song count. A playlist's cover is
   a picture the user chose for it, else the first track in it that actually has
-  artwork, else the same plain record every uncovered track gets
+  artwork, else the same bundled sleeve its first track shows in a list
 - The mini player is an inverted card — near-black on a paper screen, white on
   an ink one — with the position as a hairline along its bottom edge
 - The playing row sits on a raised rounded block with a level meter over its
@@ -151,7 +164,6 @@ shows the dialog once and a refusal cannot be re-requested.
   removes, renames or reorders anything and is safe to run twice. The same
   screen reports any saved data the app couldn't read at launch, and where the
   unreadable file was kept
-- **Download audio** — see [Downloading](#downloading)
 - App version and a note that your library stays on the device
 
 ---
@@ -245,7 +257,7 @@ Hive only ever holds **links and bookkeeping**:
 | `folder_track_links` | folder id ↔ track **file path**, added date, manual order |
 | `known_tracks` | files seen in previous scans, for new/deleted diffing |
 | `play_history` | append-only play log |
-| `settings` | theme mode, library sort preference, repeat mode, download-history visibility |
+| `settings` | theme mode, library sort preference, repeat mode, download-history visibility, recent download searches |
 | `playback_session` | last queue (paths), current track, position |
 
 Titles, artists, artwork and durations are always re-read live from
@@ -370,19 +382,18 @@ lib/
     repositories/               audio library, folders, history, known tracks, settings
   domain/                       Track, sort modes, filter state, filtering rules
   features/
-    library/                    scan, sort, search, filter, multi-select, A–Z index
+    library/                    scan, sort, search, filters, multi-select, A–Z index
     folders/                    CRUD, folder detail, add-to-folder sheet
     favorites_history/          recently played / most played views
-    search/                     search + filter panel
     player/                     player controller, mini player, now playing, queue
-    download/                   link input, download queue, history hide/clear
+    download/                   search, recent searches, download queue, history
     settings/                   theme, rescan, cleanup, new-audio screen, about
   services/
     audio/                      AudioPlayerHandler (just_audio + audio_service)
     permissions/                permission service + provider
     scanning/                   bridge to the native MediaStore query
     download/                   bridge to the embedded yt-dlp
-  widgets/                      shared: artwork, empty state, permission gate
+  widgets/                      shared: artwork, stand-in covers, empty state, permission gate
 ```
 
 ---
@@ -516,6 +527,12 @@ All eight modules from the original plan are built and verified on a device.
 Added since: app icon and splash screen, and the yt-dlp downloader
 (downloading, cancelling and history hide/clear all verified on a device).
 
+Then a pass on the downloader and on covers: it took the Search tab's place in
+the navigation bar, a download stopped clearing the search that found it, the
+last five queries are remembered, a finished download can be filed into a
+playlist by holding it, and a track with no embedded artwork gets a bundled
+sleeve instead of a grey square. Installed and checked on a device.
+
 ### Known limitations
 
 - The **"recently played" filter** returns nothing until you've actually played
@@ -525,9 +542,11 @@ Added since: app icon and splash screen, and the yt-dlp downloader
   app that queries MediaStore, this one included.
 - **Uninstalling deletes your folders and favorites.** Install a newer APK over
   the old one instead. There is no backup/export yet.
-- The release APK is signed with Flutter's **debug keys** and uses the
-  placeholder package name `com.example.music_player`. Both need changing
-  before distributing the app anywhere.
+- The release APK is signed with Flutter's **debug keys**, and while the app
+  is called FUNNY Music everywhere a user can read it, its application id is
+  still the template's `com.example.music_player`. Both need changing before
+  distributing anywhere — but changing the id installs a second app beside the
+  first and abandons its folders, so it is a one-time, deliberate move.
 - Notification artwork isn't shown yet; the notification uses the app icon.
 - **Downloading from YouTube violates its Terms of Service**, whatever tool is
   used. That is why apps of this kind are not on Google Play, and it applies to
